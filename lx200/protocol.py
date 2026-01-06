@@ -172,3 +172,26 @@ class LX200:
         # Imposta target poi sincronizza (calibra) con :CM
         self.set_target_ra_dec(ra, dec)
         return self.conn.query(":CM")
+
+    # ----- Focuser -----
+    def focus_in(self) -> None:
+        """Start moving focuser inward (slower speed)."""
+        self.conn.query(":F+")
+
+    def focus_out(self) -> None:
+        """Start moving focuser outward (faster speed)."""
+        self.conn.query(":F-")
+
+    def focus_stop(self) -> None:
+        """Stop focuser movement."""
+        self.conn.query(":FQ")
+
+    def set_focus_speed(self, speed: str) -> None:
+        """Set focuser speed: 'slow' or 'fast'."""
+        cmd = {
+            "slow": ":FS",
+            "fast": ":FF",
+        }.get(speed.lower())
+        if not cmd:
+            raise ValueError("Speed non valido. Usa: slow|fast")
+        self.conn.query(cmd)

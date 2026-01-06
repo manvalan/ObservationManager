@@ -90,6 +90,12 @@ class MockConnection:
         self._tracking = True
         self._slew_rate = "C"  # C=centering, G=guiding, M=move, S=slew
         
+        # Virtual focuser state
+        self._focus_position = 5000  # Steps (0-10000 range)
+        self._focus_moving = False
+        self._focus_speed = "slow"  # slow|fast
+        self._focus_temp = 20.5  # Celsius
+        
     def open(self) -> None:
         pass
 
@@ -181,6 +187,35 @@ class MockConnection:
         # Get alignment mode
         if cmd.startswith(":GW"):
             return "A" if self._aligned else "L"
+        
+        # Focuser commands
+        if cmd.startswith(":F+"):
+            self._focus_moving = True
+            return ""
+        
+        if cmd.startswith(":F-"):
+            self._focus_moving = True
+            return ""
+        
+        if cmd.startswith(":FQ"):
+            self._focus_moving = False
+            return ""
+        
+        if cmd.startswith(":FF"):
+            self._focus_speed = "fast"
+            return ""
+        
+        if cmd.startswith(":FS"):
+            self._focus_speed = "slow"
+            return ""
+        
+        if cmd.startswith(":FT"):
+            # Get focus temperature
+            return f"{self._focus_temp:.1f}"
+        
+        if cmd.startswith(":FG"):
+            # Get focus position (simulate)
+            return str(self._focus_position)
         
         # Default empty response
         return ""

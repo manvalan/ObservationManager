@@ -287,6 +287,84 @@ def api_stop(body: StopBody) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# -------- Focuser --------
+class FocuserSpeedBody(BaseModel):
+    speed: str = Field(default="slow", description="Focuser speed: slow|fast")
+
+
+@app.post("/api/focuser/in")
+def api_focuser_in():
+    """Start moving focuser inward."""
+    try:
+        lx = manager.get_lx200()
+        lx.focus_in()
+        return {"ok": True, "message": "Focuser moving in"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/focuser/out")
+def api_focuser_out():
+    """Start moving focuser outward."""
+    try:
+        lx = manager.get_lx200()
+        lx.focus_out()
+        return {"ok": True, "message": "Focuser moving out"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/focuser/stop")
+def api_focuser_stop():
+    """Stop focuser movement."""
+    try:
+        lx = manager.get_lx200()
+        lx.focus_stop()
+        return {"ok": True, "message": "Focuser stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/focuser/speed")
+def api_focuser_speed(body: FocuserSpeedBody):
+    """Set focuser speed (slow|fast)."""
+    try:
+        lx = manager.get_lx200()
+        lx.set_focus_speed(body.speed)
+        return {"ok": True, "speed": body.speed}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/focuser/status")
+def api_focuser_status():
+    """Get focuser status (position, temperature if available)."""
+    try:
+        lx = manager.get_lx200()
+        conn = manager._conn
+        status = {}
+        
+        # Try to get position (not all mounts support this)
+        try:
+            pos_str = conn.query(":FG")  # type: ignore
+            if pos_str and pos_str.isdigit():
+                status["position"] = int(pos_str)
+        except Exception:
+            status["position"] = None
+        
+        # Try to get temperature (not all focusers have sensor)
+        try:
+            temp_str = conn.query(":FT")  # type: ignore
+            if temp_str:
+                status["temperature_c"] = float(temp_str)
+        except Exception:
+            status["temperature_c"] = None
+        
+        return {"ok": True, "status": status}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/sync")
 def api_sync(body: SyncBody) -> dict:
     try:
