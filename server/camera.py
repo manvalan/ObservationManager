@@ -51,23 +51,12 @@ class CameraController:
         
         # Camera settings
         self.settings = {
-            "exposure": -1,      # Auto exposure (-1) o ms
-            "gain": -1,          # Auto gain (-1) o valore 0-100
-            "binning": 1,        # 1=no binning, 2=2x2, 4=4x4
+            "exposure": -1,  # Auto exposure (-1) o ms
+            "gain": -1,      # Auto gain (-1) o valore 0-100
+            "binning": 1,    # 1=no binning, 2=2x2, 4=4x4
             "fps": 30.0,
             "width": 640,
             "height": 480,
-            "brightness": -1,    # Brightness (-1=auto, 0-100)
-            "contrast": -1,      # Contrast (-1=auto, 0-100)
-            "saturation": -1,    # Saturation (-1=auto, 0-100)
-            "hue": -1,           # Hue (-1=auto, -180 to 180)
-            "sharpness": -1,     # Sharpness (-1=auto, 0-100)
-            "gamma": -1,         # Gamma (-1=auto, 0-300)
-            "white_balance": -1, # White balance (-1=auto, 2000-7500K)
-            "backlight": -1,     # Backlight compensation (-1=auto, 0-1)
-            "focus": -1,         # Focus (-1=auto, 0-255)
-            "zoom": -1,          # Digital zoom (-1=auto, 100-500)
-            "iso": -1,           # ISO sensitivity (-1=auto, 100-6400)
         }
         
         # Statistics cache
@@ -136,30 +125,17 @@ class CameraController:
     
     def close_device(self):
         """Chiude device e ferma capture."""
-        caps = {
-            "width": int(self.device.get(cv2.CAP_PROP_FRAME_WIDTH)),
-            "height": int(self.device.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-            "fps": self.device.get(cv2.CAP_PROP_FPS),
-            "brightness": self.device.get(cv2.CAP_PROP_BRIGHTNESS),
-            "contrast": self.device.get(cv2.CAP_PROP_CONTRAST),
-            "saturation": self.device.get(cv2.CAP_PROP_SATURATION),
-            "hue": self.device.get(cv2.CAP_PROP_HUE),
-            "exposure": self.device.get(cv2.CAP_PROP_EXPOSURE),
-            "gain": self.device.get(cv2.CAP_PROP_GAIN),
-            "sharpness": self.device.get(cv2.CAP_PROP_SHARPNESS) if hasattr(cv2, 'CAP_PROP_SHARPNESS') else -1,
-            "gamma": self.device.get(cv2.CAP_PROP_GAMMA) if hasattr(cv2, 'CAP_PROP_GAMMA') else -1,
-            "white_balance": self.device.get(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U) if hasattr(cv2, 'CAP_PROP_WHITE_BALANCE_BLUE_U') else -1,
-            "backlight": self.device.get(cv2.CAP_PROP_BACKLIGHT) if hasattr(cv2, 'CAP_PROP_BACKLIGHT') else -1,
-            "focus": self.device.get(cv2.CAP_PROP_FOCUS) if hasattr(cv2, 'CAP_PROP_FOCUS') else -1,
-            "zoom": self.device.get(cv2.CAP_PROP_ZOOM) if hasattr(cv2, 'CAP_PROP_ZOOM') else -1,
-            "iso": self.device.get(cv2.CAP_PROP_ISO_SPEED) if hasattr(cv2, 'CAP_PROP_ISO_SPEED') else -1,
-            "auto_exposure": self.device.get(cv2.CAP_PROP_AUTO_EXPOSURE),
-            "auto_wb": self.device.get(cv2.CAP_PROP_AUTO_WB) if hasattr(cv2, 'CAP_PROP_AUTO_WB') else -1,
-            "autofocus": self.device.get(cv2.CAP_PROP_AUTOFOCUS) if hasattr(cv2, 'CAP_PROP_AUTOFOCUS') else -1,
-            "backend": self.device.getBackendName() if hasattr(self.device, 'getBackendName') else "unknown"
-        }
+        self.stop_capture()
+        if self.device is not None:
+            self.device.release()
+            self.device = None
+            self.device_index = None
+    
+    def _get_capabilities(self) -> Dict[str, Any]:
+        """Legge capabilities device corrente."""
+        if self.device is None:
+            return {}
         
-        return caps
         return {
             "width": int(self.device.get(cv2.CAP_PROP_FRAME_WIDTH)),
             "height": int(self.device.get(cv2.CAP_PROP_FRAME_HEIGHT)),
@@ -184,83 +160,6 @@ class CameraController:
         # FPS
         self.device.set(cv2.CAP_PROP_FPS, self.settings["fps"])
         
-        
-        # Brightness
-        if self.settings["brightness"] >= 0:
-            self.device.set(cv2.CAP_PROP_BRIGHTNESS, self.settings["brightness"])
-        
-        # Contrast
-        if self.settings["contrast"] >= 0:
-            self.device.set(cv2.CAP_PROP_CONTRAST, self.settings["contrast"])
-        
-        # Saturation
-        if self.settings["saturation"] >= 0:
-            self.device.set(cv2.CAP_PROP_SATURATION, self.settings["saturation"])
-        brightness: Luminosità 0-100 (-1 = auto)
-            contrast: Contrasto 0-100 (-1 = auto)
-            saturation: Saturazione 0-100 (-1 = auto)
-            hue: Tonalità -180 to 180 (-1 = auto)
-            sharpness: Nitidezza 0-100 (-1 = auto)
-            gamma: Gamma 0-300 (-1 = auto)
-            white_balance: Bilanciamento bianco 2000-7500K (-1 = auto)
-            backlight: Compensazione controluce 0-1 (-1 = auto)
-            focus: Fuoco 0-255 (-1 = auto)
-            zoom: Zoom digitale 100-500 (-1 = auto)
-            iso: Sensibilità ISO 100-6400 (-1 = auto)
-            
-        Returns:
-            Settings aggiornati
-        """
-        allowed_keys = [
-            "exposure", "gain", "binning", "width", "height", "fps",
-            "brightness", "contrast", "saturation", "hue", "sharpness",
-            "gamma", "white_balance", "backlight", "focus", "zoom", "iso"
-        ]
-        
-        for key in allowed_keys
-        # Sharpness
-        if self.settings["sharpness"] >= 0 and hasattr(cv2, 'CAP_PROP_SHARPNESS'):
-            self.device.set(cv2.CAP_PROP_SHARPNESS, self.settings["sharpness"])
-        
-        # Gamma
-        if self.settings["gamma"] >= 0 and hasattr(cv2, 'CAP_PROP_GAMMA'):
-            self.device.set(cv2.CAP_PROP_GAMMA, self.settings["gamma"])
-        
-        # White Balance
-        if self.settings["white_balance"] >= 0:
-            # Disabilita auto white balance
-            if hasattr(cv2, 'CAP_PROP_AUTO_WB'):
-                self.device.set(cv2.CAP_PROP_AUTO_WB, 0)
-            if hasattr(cv2, 'CAP_PROP_WHITE_BALANCE_BLUE_U'):
-                self.device.set(cv2.CAP_PROP_WHITE_BALANCE_BLUE_U, self.settings["white_balance"])
-        else:
-            # Auto white balance
-            if hasattr(cv2, 'CAP_PROP_AUTO_WB'):
-                self.device.set(cv2.CAP_PROP_AUTO_WB, 1)
-        
-        # Focus
-        if self.settings["focus"] >= 0:
-            # Disabilita autofocus
-            if hasattr(cv2, 'CAP_PROP_AUTOFOCUS'):
-                self.device.set(cv2.CAP_PROP_AUTOFOCUS, 0)
-            if hasattr(cv2, 'CAP_PROP_FOCUS'):
-                self.device.set(cv2.CAP_PROP_FOCUS, self.settings["focus"])
-        else:
-            # Autofocus
-            if hasattr(cv2, 'CAP_PROP_AUTOFOCUS'):
-                self.device.set(cv2.CAP_PROP_AUTOFOCUS, 1)
-        
-        # Zoom
-        if self.settings["zoom"] >= 0 and hasattr(cv2, 'CAP_PROP_ZOOM'):
-            self.device.set(cv2.CAP_PROP_ZOOM, self.settings["zoom"])
-        
-        # Backlight compensation
-        if self.settings["backlight"] >= 0 and hasattr(cv2, 'CAP_PROP_BACKLIGHT'):
-            self.device.set(cv2.CAP_PROP_BACKLIGHT, self.settings["backlight"])
-        
-        # ISO
-        if self.settings["iso"] >= 0 and hasattr(cv2, 'CAP_PROP_ISO_SPEED'):
-            self.device.set(cv2.CAP_PROP_ISO_SPEED, self.settings["iso"])
         # Exposure (se supportato)
         if self.settings["exposure"] >= 0:
             # Disabilita auto-exposure

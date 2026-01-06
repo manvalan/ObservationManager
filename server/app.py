@@ -16,6 +16,10 @@ from lx200.protocol import LX200, parse_ra, parse_dec
 from lx200.catalog import resolve_name
 from lx200.catalog import resolve_id_via_gaia
 from server.camera import camera_controller
+from server.sequence import (
+    ObservingSequence, SequenceStep, StepType, StepStatus,
+    SequenceExecutor, get_executor, register_executor, unregister_executor
+)
 
 import os
 import json
@@ -909,6 +913,242 @@ hop_session = {
     "current_step": 0,
     "completed_steps": []
 }
+
+
+# -------- Sequence Automation API --------
+
+@app.get("/api/sequences")
+def api_list_sequences():
+    """Lista tutte le sequenze salvate."""
+    try:
+        sequences = ObservingSequence.list_all()
+        return {"sequences": sequences, "count": len(sequences)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/sequences/{sequence_id}")
+def api_get_sequence(sequence_id: str):
+    """Ottiene sequenza completa con steps."""
+    try:
+        seq = ObservingSequence.load(sequence_id)
+        if not seq:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+        return seq.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class CreateSequenceBody(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    target: Optional[str] = None
+
+
+@app.post("/api/sequences")
+def api_create_sequence(body: CreateSequenceBody):
+    """Crea nuova sequenza."""
+    try:
+        seq = ObservingSequence(
+            name=body.name,
+            description=body.description or "",
+            target=body.target
+        )
+        seq.save()
+        return {"status": "created", "sequence": seq.to_dict()}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class UpdateSequenceBody(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    target: Optional[str] = None
+
+
+@app.put("/api/sequences/{sequence_id}")
+def api_update_sequence(sequence_id: str, body: UpdateSequenceBody):
+    """Aggiorna metadata sequenza."""
+    try:
+        seq = ObservingSequence.load(sequence_id)
+        if not seq:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+        
+        if body.name:
+            seq.name = body.name
+        if body.description is not None:
+            seq.description = body.description
+        if body.target is not None:
+            seq.target = body.target
+        
+        seq.modified_at = time.time()
+        seq.save()
+        
+        return {"status": "updated", "sequence": seq.to_dict()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/sequences/{sequence_id}")
+def api_delete_sequence(sequence_id: str):
+    """Elimina sequenza."""
+    try:
+        seq = ObservingSequence.load(sequence_id)
+        if not seq:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+        
+        seq.delete()
+        return {"status": "deleted", "sequence_id": sequence_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class AddStepBody(BaseModel):
+    type: str
+    name: Optional[str] = None
+    params: dict
+
+
+@app.post("/api/sequences/{sequence_id}/steps")
+def api_add_step(sequence_id: str, body: AddStepBody):
+    """Aggiunge step a sequenza."""
+    try:
+        seq = ObservingSequence.load(sequence_id)
+        if not seq:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+        
+        step = SequenceStep(
+            step_type=StepType(body.type),
+            params=body.params,
+            name=body.name
+        )
+        seq.add_step(step)
+        seq.save()
+        
+        return {"status": "added", "step": step.to_dict()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/sequences/{sequence_id}/steps/{step_id}")
+def api_delete_step(sequence_id: str, step_id: str):
+    """Rimuove step da sequenza."""
+    try:
+        seq = ObservingSequence.load(sequence_id)
+        if not seq:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+        
+        seq.remove_step(step_id)
+        seq.save()
+        
+        return {"status": "deleted", "step_id": step_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/sequences/{sequence_id}/execute")
+def api_execute_sequence(sequence_id: str):
+    """Avvia esecuzione sequenza."""
+    try:
+        seq = ObservingSequence.load(sequence_id)
+        if not seq:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+        
+        # Check if already executing
+        existing = get_executor(sequence_id)
+        if existing and existing.is_running:
+            raise HTTPException(status_code=400, detail="Sequence already executing")
+        
+        # Reset step status
+        seq.reset_status()
+        
+        # Create executor
+        executor = SequenceExecutor(
+            sequence=seq,
+            lx200_getter=lambda: manager.get_lx200(),
+            camera_controller=camera_controller
+        )
+        
+        register_executor(sequence_id, executor)
+        executor.start()
+        
+        return {"status": "started", "sequence_id": sequence_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/sequences/{sequence_id}/pause")
+def api_pause_sequence(sequence_id: str):
+    """Mette in pausa esecuzione."""
+    try:
+        executor = get_executor(sequence_id)
+        if not executor:
+            raise HTTPException(status_code=404, detail="No active execution")
+        
+        executor.pause()
+        return {"status": "paused"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/sequences/{sequence_id}/resume")
+def api_resume_sequence(sequence_id: str):
+    """Riprende esecuzione."""
+    try:
+        executor = get_executor(sequence_id)
+        if not executor:
+            raise HTTPException(status_code=404, detail="No active execution")
+        
+        executor.resume()
+        return {"status": "resumed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/sequences/{sequence_id}/abort")
+def api_abort_sequence(sequence_id: str):
+    """Interrompe esecuzione."""
+    try:
+        executor = get_executor(sequence_id)
+        if not executor:
+            raise HTTPException(status_code=404, detail="No active execution")
+        
+        executor.abort()
+        unregister_executor(sequence_id)
+        return {"status": "aborted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/sequences/{sequence_id}/status")
+def api_sequence_status(sequence_id: str):
+    """Ottiene stato esecuzione corrente."""
+    try:
+        executor = get_executor(sequence_id)
+        if not executor:
+            return {"status": "not_running", "sequence_id": sequence_id}
+        
+        return executor.get_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def _angular_distance(ra1, dec1, ra2, dec2):
