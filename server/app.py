@@ -903,6 +903,200 @@ def api_camera_save_fits(body: SaveFitsBody):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# -------- Watec 910BD Control API --------
+
+class WatecConnectBody(BaseModel):
+    port: Optional[str] = Field(None, description="Porta seriale (auto-detect se None)")
+
+
+class WatecGammaBody(BaseModel):
+    gamma: str = Field(..., description="Gamma: 0.45, 0.50, o OFF")
+
+
+class WatecShutterBody(BaseModel):
+    multiplier: int = Field(..., description="Moltiplicatore shutter: 1-256 (potenze di 2)")
+
+
+class WatecAGCBody(BaseModel):
+    enabled: bool = Field(..., description="AGC abilitato/disabilitato")
+
+
+class WatecGainBody(BaseModel):
+    gain: int = Field(..., description="Gain manuale 0-255 (solo se AGC disabilitato)")
+
+
+class WatecAWBBody(BaseModel):
+    enabled: bool = Field(..., description="Auto White Balance abilitato/disabilitato")
+
+
+class WatecBLCBody(BaseModel):
+    enabled: bool = Field(..., description="Back Light Compensation abilitato/disabilitato")
+
+
+class WatecPresetBody(BaseModel):
+    preset: str = Field(..., description="Preset: lunar, planetary, deepsky, occultation")
+
+
+@app.post("/api/camera/watec/connect")
+def api_watec_connect(body: WatecConnectBody):
+    """Connette alla Watec 910BD via USB (sistema TACOS Arduino)."""
+    if not camera_controller.watec:
+        raise HTTPException(status_code=503, detail="Supporto Watec non disponibile (pyserial mancante)")
+    
+    try:
+        success = camera_controller.watec.connect(body.port)
+        if not success:
+            raise HTTPException(status_code=404, detail="Watec 910BD non trovata o non risponde")
+        
+        # Marca che stiamo usando Watec (per logica ibrida)
+        camera_controller.is_watec_camera = True
+        
+        return {
+            "status": "connected",
+            "port": camera_controller.watec.port_name,
+            "config": camera_controller.watec.get_status()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/disconnect")
+def api_watec_disconnect():
+    """Disconnette dalla Watec 910BD."""
+    if not camera_controller.watec:
+        raise HTTPException(status_code=503, detail="Supporto Watec non disponibile")
+    
+    camera_controller.watec.disconnect()
+    camera_controller.is_watec_camera = False
+    
+    return {"status": "disconnected"}
+
+
+@app.get("/api/camera/watec/status")
+def api_watec_status():
+    """Ritorna stato corrente Watec 910BD."""
+    if not camera_controller.watec:
+        raise HTTPException(status_code=503, detail="Supporto Watec non disponibile")
+    
+    return camera_controller.watec.get_status()
+
+
+@app.post("/api/camera/watec/gamma")
+def api_watec_set_gamma(body: WatecGammaBody):
+    """Imposta curva gamma Watec."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.set_gamma(body.gamma)
+        if not success:
+            raise HTTPException(status_code=400, detail="Comando gamma fallito")
+        return {"status": "ok", "gamma": body.gamma}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/shutter")
+def api_watec_set_shutter(body: WatecShutterBody):
+    """Imposta velocità shutter Watec."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.set_shutter(body.multiplier)
+        if not success:
+            raise HTTPException(status_code=400, detail="Comando shutter fallito")
+        
+        status = camera_controller.watec.get_status()
+        return {
+            "status": "ok",
+            "multiplier": body.multiplier,
+            "shutter_speed": status["shutter_speed"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/agc")
+def api_watec_set_agc(body: WatecAGCBody):
+    """Imposta AGC (Automatic Gain Control) Watec."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.set_agc(body.enabled)
+        if not success:
+            raise HTTPException(status_code=400, detail="Comando AGC fallito")
+        return {"status": "ok", "agc_enabled": body.enabled}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/gain")
+def api_watec_set_gain(body: WatecGainBody):
+    """Imposta gain manuale Watec (solo se AGC disabilitato)."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.set_gain(body.gain)
+        if not success:
+            raise HTTPException(status_code=400, detail="Comando gain fallito (AGC abilitato?)")
+        return {"status": "ok", "gain": body.gain}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/awb")
+def api_watec_set_awb(body: WatecAWBBody):
+    """Imposta Auto White Balance Watec."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.set_awb(body.enabled)
+        if not success:
+            raise HTTPException(status_code=400, detail="Comando AWB fallito")
+        return {"status": "ok", "awb_enabled": body.enabled}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/blc")
+def api_watec_set_blc(body: WatecBLCBody):
+    """Imposta Back Light Compensation Watec."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.set_blc(body.enabled)
+        if not success:
+            raise HTTPException(status_code=400, detail="Comando BLC fallito")
+        return {"status": "ok", "blc_enabled": body.enabled}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/watec/preset")
+def api_watec_apply_preset(body: WatecPresetBody):
+    """Applica preset ottimizzato Watec (lunar, planetary, deepsky, occultation)."""
+    if not camera_controller.watec or not camera_controller.is_watec_camera:
+        raise HTTPException(status_code=503, detail="Watec non connessa")
+    
+    try:
+        success = camera_controller.watec.apply_preset(body.preset)
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Preset {body.preset} non valido o fallito")
+        
+        return {
+            "status": "ok",
+            "preset": body.preset,
+            "config": camera_controller.watec.get_status()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # -------- Star-Hopping Planner --------
 hop_session = {
     "active": False,

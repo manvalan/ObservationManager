@@ -10,6 +10,7 @@ Sistema completo per controllo montatura Meade LX200 con interfaccia web moderna
 - 📊 **Precisione topocentric** - Skyfield + refrazione atmosferica
 - 📚 **Cataloghi Gaia** - 231M stelle + SAO/HIP/HD resolution
 - 🎥 **Camera streaming** - MJPEG con reticle overlay
+- **🎬 Watec 910BD Support** - Controllo completo via sistema TACOS Arduino
 - 🧪 **Mock driver** - Sviluppo senza hardware fisico
 - 📱 **Responsive** - Desktop, tablet, mobile
 
@@ -195,6 +196,52 @@ sudo cmake --install build
 ```
 
 Se il binario è nel `PATH`, la CLI userà automaticamente Gaia per `find`/`goto-name`, altrimenti userà i file CSV/JSON in `~/.catalog/crossreference`.
+
+## 🎬 Watec 910BD Camera Support
+
+ObservationManager supporta nativamente la **Watec 910BD** (e varianti) tramite sistema **TACOS Arduino**:
+
+### Setup Rapido
+
+1. **Hardware necessario:**
+   - Watec 910BD (o 910HX/902H2)
+   - Video grabber USB PAL/NTSC (per il video)
+   - Arduino Nano/Uno con firmware TACOS (per il controllo)
+   - Cavo RS-232 Watec → Arduino
+
+2. **Installazione firmware:**
+```bash
+# Scarica firmware TACOS
+# Da: http://www.hristopavlov.net/WAT910BD/
+# Carica su Arduino con Arduino IDE
+```
+
+3. **Test connessione:**
+```bash
+./test_watec.py  # Test suite completo
+```
+
+4. **Uso in Web UI:**
+   - Apri `http://localhost:8000/camera.html`
+   - Clicca **"🎥 Watec 910BD"** in alto
+   - Connetti → Il sistema rileva automaticamente Arduino
+
+### Controlli Disponibili
+
+- **Gamma**: 0.45 / 0.50 / OFF (linear)
+- **Shutter**: 1/50 - 1/12800 sec (9 step)
+- **AGC**: ON/OFF + gain manuale 0-255
+- **Preset**: Lunar, Planetary, Deep Sky, Occultation
+
+### Documentazione Completa
+
+Vedi **[WATEC_910BD_SETUP.md](WATEC_910BD_SETUP.md)** per:
+- Schema connessioni hardware
+- Guida firmware TACOS
+- API REST endpoints
+- Troubleshooting
+- Scripting Python
+- Specifiche tecniche
 
 ## Prossimi passi
 

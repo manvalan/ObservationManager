@@ -1,6 +1,7 @@
 """
 Camera Control Module - ObservationManager
 Gestisce device video, controlli esposizione/gain/binning, cattura immagini, plate solving
+Supporto Watec 910BD con sistema TACOS Arduino
 """
 import time
 import threading
@@ -8,6 +9,7 @@ from typing import Optional, Dict, List, Any, Tuple
 from pathlib import Path
 from datetime import datetime
 import json
+import logging
 
 try:
     import cv2
@@ -26,6 +28,14 @@ except ImportError:
     fits = None
     Time = None
     HAS_ASTROPY = False
+
+try:
+    from server.watec_controller import get_watec_controller
+    HAS_WATEC = True
+except ImportError:
+    HAS_WATEC = False
+
+logger = logging.getLogger(__name__)
 
 
 class CameraController:
@@ -58,6 +68,13 @@ class CameraController:
             "width": 640,
             "height": 480,
         }
+        
+        # Watec 910BD controller (se disponibile)
+        self.watec = None
+        self.is_watec_camera = False
+        if HAS_WATEC:
+            self.watec = get_watec_controller()
+            logger.info("Supporto Watec 910BD abilitato")
         
         # Statistics cache
         self.stats_cache: Dict[str, Any] = {}

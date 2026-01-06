@@ -235,7 +235,9 @@
 </head>
 <body>
   <h1>🎥 Camera Control</h1>
-  <p><a href="index.html">← Home</a> | <a href="control.html">Controllo Montatura</a> | <a href="sky.html">Sky Map</a></p>
+  <p><a href="index.html">← Home</a> | <a href="control.html">Controllo Montatura</a> | <a href="sky.html">Sky Map</a> | 
+     <a href="#" id="toggleWatecPanel" style="color: #ffb74d;">🎥 Watec 910BD</a>
+  </p>
 
   <div class="container">
     <!-- Left Panel: Controls -->
@@ -350,6 +352,91 @@
         </details>
         
         <button id="btnApplySettings" class="secondary">Applica Settings</button>
+      </div>
+      
+      <!-- Watec 910BD Controls -->
+      <div class="panel" id="watecPanel" style="display: none;">
+        <h2>🎥 Watec 910BD</h2>
+        
+        <div class="control-group">
+          <label>Stato Connessione</label>
+          <div id="watecStatus">
+            <span class="status-indicator inactive" id="watecStatusDot"></span>
+            <span id="watecStatusText">Non connessa</span>
+          </div>
+        </div>
+        
+        <div class="btn-group">
+          <button id="btnWatecConnect" class="secondary">Connetti</button>
+          <button id="btnWatecDisconnect" class="danger">Disconnetti</button>
+        </div>
+        
+        <hr style="border-color: #444; margin: 1rem 0;">
+        
+        <!-- Gamma -->
+        <div class="control-group">
+          <label>Gamma</label>
+          <select id="watecGamma">
+            <option value="0.45">0.45 (Standard)</option>
+            <option value="0.50">0.50 (High)</option>
+            <option value="OFF">OFF (Linear)</option>
+          </select>
+        </div>
+        
+        <!-- Shutter Speed -->
+        <div class="control-group">
+          <label>Shutter Speed <span id="watecShutterValue">1/50</span></label>
+          <input type="range" id="watecShutter" min="0" max="8" value="0" step="1" />
+          <div style="font-size: 0.75rem; color: #888;">
+            0=1/50, 1=1/100, 2=1/200, 3=1/400, 4=1/800, 5=1/1600, 6=1/3200, 7=1/6400, 8=1/12800
+          </div>
+        </div>
+        
+        <!-- AGC -->
+        <div class="control-group">
+          <label>
+            <input type="checkbox" id="watecAGC" checked />
+            AGC (Automatic Gain Control)
+          </label>
+        </div>
+        
+        <!-- Manual Gain (solo se AGC OFF) -->
+        <div class="control-group" id="watecManualGainGroup" style="display: none;">
+          <label>Gain Manuale <span id="watecGainValue">128</span></label>
+          <input type="range" id="watecGain" min="0" max="255" value="128" />
+        </div>
+        
+        <!-- AWB -->
+        <div class="control-group">
+          <label>
+            <input type="checkbox" id="watecAWB" checked />
+            AWB (Auto White Balance)
+          </label>
+        </div>
+        
+        <!-- BLC -->
+        <div class="control-group">
+          <label>
+            <input type="checkbox" id="watecBLC" />
+            BLC (Back Light Compensation)
+          </label>
+        </div>
+        
+        <hr style="border-color: #444; margin: 1rem 0;">
+        
+        <!-- Presets -->
+        <div class="control-group">
+          <label>Preset Ottimizzati</label>
+          <select id="watecPreset">
+            <option value="">-- Seleziona preset --</option>
+            <option value="lunar">🌙 Lunar (1/3200, gain 50)</option>
+            <option value="planetary">🪐 Planetary (1/1600, gain 100)</option>
+            <option value="deepsky">🌌 Deep Sky (1/50, AGC)</option>
+            <option value="occultation">⭐ Occultation (1/100, gain 200)</option>
+          </select>
+        </div>
+        
+        <button id="btnWatecApplyPreset" class="secondary">Applica Preset</button>
       </div>
       
       <!-- Capture Controls -->
@@ -720,6 +807,208 @@
       }
     }
     
+    // ========== Watec 910BD Control ==========
+    function updateWatecStatus(connected, port = null) {
+      const dot = document.getElementById('watecStatusDot');
+      const text = document.getElementById('watecStatusText');
+      
+      if (connected) {
+        dot.className = 'status-indicator active';
+        text.textContent = port ? `Connessa (${port})` : 'Connessa';
+      } else {
+        dot.className = 'status-indicator inactive';
+        text.textContent = 'Non connessa';
+      }
+    }
+    
+    async function watecConnect() {
+      try {
+        log('Connessione Watec 910BD...');
+        const resp = await fetch('/api/camera/watec/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})  // Auto-detect porta
+        });
+        const data = await resp.json();
+        
+        updateWatecStatus(true, data.port);
+        log(`Watec connessa su ${data.port}`, 'success');
+        
+        // Mostra pannello Watec
+        document.getElementById('watecPanel').style.display = 'block';
+        
+        // Aggiorna UI con stato corrente
+        updateWatecUI(data.config);
+        
+      } catch (err) {
+        log(`Errore connessione Watec: ${err.message}`, 'error');
+        updateWatecStatus(false);
+      }
+    }
+    
+    async function watecDisconnect() {
+      try {
+        await fetch('/api/camera/watec/disconnect', { method: 'POST' });
+        updateWatecStatus(false);
+        log('Watec disconnessa', 'success');
+      } catch (err) {
+        log(`Errore disconnessione: ${err.message}`, 'error');
+      }
+    }
+    
+    function updateWatecUI(config) {
+      // Gamma
+      document.getElementById('watecGamma').value = config.gamma || '0.45';
+      
+      // Shutter (converti multiplier a slider value)
+      const multipliers = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+      const shutterIndex = multipliers.indexOf(config.shutter_multiplier);
+      document.getElementById('watecShutter').value = shutterIndex >= 0 ? shutterIndex : 0;
+      document.getElementById('watecShutterValue').textContent = config.shutter_speed || '1/50';
+      
+      // AGC
+      document.getElementById('watecAGC').checked = config.agc_enabled !== false;
+      updateManualGainVisibility();
+      
+      // Gain manuale
+      document.getElementById('watecGain').value = config.gain || 128;
+      document.getElementById('watecGainValue').textContent = config.gain || 128;
+      
+      // AWB
+      document.getElementById('watecAWB').checked = config.awb_enabled !== false;
+      
+      // BLC
+      document.getElementById('watecBLC').checked = config.blc_enabled === true;
+    }
+    
+    function updateManualGainVisibility() {
+      const agcEnabled = document.getElementById('watecAGC').checked;
+      const gainGroup = document.getElementById('watecManualGainGroup');
+      gainGroup.style.display = agcEnabled ? 'none' : 'block';
+    }
+    
+    async function watecSetGamma() {
+      const gamma = document.getElementById('watecGamma').value;
+      
+      try {
+        await fetch('/api/camera/watec/gamma', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gamma })
+        });
+        log(`Watec gamma → ${gamma}`, 'success');
+      } catch (err) {
+        log(`Errore gamma: ${err.message}`, 'error');
+      }
+    }
+    
+    async function watecSetShutter() {
+      const multipliers = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+      const index = parseInt(document.getElementById('watecShutter').value);
+      const multiplier = multipliers[index];
+      
+      try {
+        const resp = await fetch('/api/camera/watec/shutter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ multiplier })
+        });
+        const data = await resp.json();
+        
+        document.getElementById('watecShutterValue').textContent = data.shutter_speed;
+        log(`Watec shutter → ${data.shutter_speed}`, 'success');
+      } catch (err) {
+        log(`Errore shutter: ${err.message}`, 'error');
+      }
+    }
+    
+    async function watecSetAGC() {
+      const enabled = document.getElementById('watecAGC').checked;
+      
+      try {
+        await fetch('/api/camera/watec/agc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        log(`Watec AGC → ${enabled ? 'ON' : 'OFF'}`, 'success');
+        updateManualGainVisibility();
+      } catch (err) {
+        log(`Errore AGC: ${err.message}`, 'error');
+      }
+    }
+    
+    async function watecSetGain() {
+      const gain = parseInt(document.getElementById('watecGain').value);
+      document.getElementById('watecGainValue').textContent = gain;
+      
+      try {
+        await fetch('/api/camera/watec/gain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gain })
+        });
+        log(`Watec gain manuale → ${gain}`, 'success');
+      } catch (err) {
+        log(`Errore gain: ${err.message}`, 'error');
+      }
+    }
+    
+    async function watecSetAWB() {
+      const enabled = document.getElementById('watecAWB').checked;
+      
+      try {
+        await fetch('/api/camera/watec/awb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        log(`Watec AWB → ${enabled ? 'ON' : 'OFF'}`, 'success');
+      } catch (err) {
+        log(`Errore AWB: ${err.message}`, 'error');
+      }
+    }
+    
+    async function watecSetBLC() {
+      const enabled = document.getElementById('watecBLC').checked;
+      
+      try {
+        await fetch('/api/camera/watec/blc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        log(`Watec BLC → ${enabled ? 'ON' : 'OFF'}`, 'success');
+      } catch (err) {
+        log(`Errore BLC: ${err.message}`, 'error');
+      }
+    }
+    
+    async function watecApplyPreset() {
+      const preset = document.getElementById('watecPreset').value;
+      if (!preset) {
+        log('Seleziona un preset', 'error');
+        return;
+      }
+      
+      try {
+        log(`Applicazione preset ${preset}...`);
+        const resp = await fetch('/api/camera/watec/preset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preset })
+        });
+        const data = await resp.json();
+        
+        // Aggiorna UI
+        updateWatecUI(data.config);
+        
+        log(`Preset "${preset}" applicato con successo`, 'success');
+      } catch (err) {
+        log(`Errore preset: ${err.message}`, 'error');
+      }
+    }
+    
     // ========== Event Handlers ==========
     document.getElementById('btnScanDevices').onclick = scanDevices;
     document.getElementById('btnOpenDevice').onclick = openDevice;
@@ -728,6 +1017,24 @@
     document.getElementById('btnStopCapture').onclick = stopCapture;
     document.getElementById('btnCaptureFrame').onclick = captureFrame;
     document.getElementById('btnSaveFITS').onclick = saveFITS;
+    
+    // Watec event handlers
+    document.getElementById('btnWatecConnect').onclick = watecConnect;
+    document.getElementById('btnWatecDisconnect').onclick = watecDisconnect;
+    document.getElementById('watecGamma').onchange = watecSetGamma;
+    document.getElementById('watecShutter').oninput = watecSetShutter;
+    document.getElementById('watecAGC').onchange = watecSetAGC;
+    document.getElementById('watecGain').oninput = watecSetGain;
+    document.getElementById('watecAWB').onchange = watecSetAWB;
+    document.getElementById('watecBLC').onchange = watecSetBLC;
+    document.getElementById('btnWatecApplyPreset').onclick = watecApplyPreset;
+    
+    // Toggle Watec panel visibility
+    document.getElementById('toggleWatecPanel').onclick = (e) => {
+      e.preventDefault();
+      const panel = document.getElementById('watecPanel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
     
     // Auto-scan on load
     scanDevices();
