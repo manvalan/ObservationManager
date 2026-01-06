@@ -6,66 +6,197 @@
   <title>Star-Hopping - Osservatorio</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: #fff; }
-    .header {
-      padding: 1rem; background: #222; border-bottom: 2px solid #0088ff;
-      display: flex; justify-content: space-between; align-items: center;
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); 
+      color: #fff; 
+      min-height: 100vh;
     }
-    .header h1 { font-size: 1.5rem; }
-    .nav { display: flex; gap: 0.5rem; }
-    .nav a { padding: 0.5rem 1rem; background: #0088ff; color: #fff; text-decoration: none; border-radius: 4px; }
-    .nav a:hover { background: #0066cc; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .header {
+      padding: 1.5rem; 
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+      border-bottom: 3px solid #0088ff;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 4px 12px rgba(0, 136, 255, 0.2);
+    }
+    .header h1 { 
+      font-size: 1.8rem; 
+      background: linear-gradient(135deg, #0088ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+    }
+    .nav { display: flex; gap: 0.75rem; }
+    .nav a { 
+      padding: 0.75rem 1.5rem; 
+      background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%); 
+      color: #fff; 
+      text-decoration: none; 
+      border-radius: 8px;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+    .nav a:hover { 
+      background: linear-gradient(135deg, #0066cc 0%, #0044aa 100%); 
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 136, 255, 0.4);
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
     
     .planner-section {
-      background: #222; padding: 2rem; border-radius: 8px; margin-bottom: 2rem;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+      padding: 2.5rem; 
+      border-radius: 16px; 
+      margin-bottom: 2rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 136, 255, 0.1);
+      border: 1px solid rgba(0, 136, 255, 0.2);
     }
-    .planner-section h2 { margin-bottom: 1rem; color: #0088ff; }
+    .planner-section h2 { 
+      margin-bottom: 1.5rem; 
+      color: #0088ff; 
+      font-size: 1.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     
     .form-grid {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem; margin-bottom: 1rem;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem; margin-bottom: 1.5rem;
     }
     .form-group { display: flex; flex-direction: column; }
-    .form-group label { font-size: 0.9rem; margin-bottom: 0.25rem; color: #aaa; }
-    .form-group input {
-      padding: 0.5rem; background: #333; color: #fff; border: 1px solid #555;
-      border-radius: 4px; font-size: 1rem;
+    .form-group label { 
+      font-size: 0.9rem; 
+      margin-bottom: 0.5rem; 
+      color: #aaa; 
+      font-weight: 500;
     }
-    .form-group input:focus { outline: none; border-color: #0088ff; }
+    .form-group input {
+      padding: 0.75rem; 
+      background: rgba(255, 255, 255, 0.05); 
+      color: #fff; 
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px; 
+      font-size: 1rem;
+      transition: all 0.3s;
+    }
+    .form-group input:focus { 
+      outline: none; 
+      border-color: #0088ff; 
+      background: rgba(0, 136, 255, 0.1);
+      box-shadow: 0 0 0 4px rgba(0, 136, 255, 0.1);
+    }
     
     .btn {
-      padding: 0.75rem 1.5rem; background: #0088ff; color: #fff; border: none;
-      border-radius: 4px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+      padding: 0.875rem 2rem; 
+      background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%); 
+      color: #fff; 
+      border: none;
+      border-radius: 10px; 
+      font-size: 1rem; 
+      font-weight: 600;
+      cursor: pointer; 
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 136, 255, 0.3);
     }
-    .btn:hover { background: #0066cc; }
-    .btn:disabled { background: #555; cursor: not-allowed; }
-    .btn-secondary { background: #555; }
-    .btn-secondary:hover { background: #666; }
-    .btn-success { background: #28a745; }
-    .btn-success:hover { background: #218838; }
+    .btn:hover { 
+      background: linear-gradient(135deg, #0066cc 0%, #0044aa 100%); 
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 136, 255, 0.4);
+    }
+    .btn:active {
+      transform: translateY(0px);
+      box-shadow: 0 2px 8px rgba(0, 136, 255, 0.3);
+    }
+    .btn:disabled { 
+      background: #555; 
+      cursor: not-allowed; 
+      transform: none;
+      box-shadow: none;
+    }
+    .btn-secondary { 
+      background: linear-gradient(135deg, #555 0%, #444 100%); 
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .btn-secondary:hover { 
+      background: linear-gradient(135deg, #666 0%, #555 100%); 
+    }
+    .btn-success { 
+      background: linear-gradient(135deg, #28a745 0%, #218838 100%); 
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    .btn-success:hover { 
+      background: linear-gradient(135deg, #218838 0%, #1e7e34 100%); 
+    }
     
     .steps-section {
-      background: #222; padding: 2rem; border-radius: 8px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+      padding: 2.5rem; 
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 136, 255, 0.1);
+      border: 1px solid rgba(0, 136, 255, 0.2);
     }
-    .steps-section h2 { margin-bottom: 1rem; color: #0088ff; }
+    .steps-section h2 { 
+      margin-bottom: 1.5rem; 
+      color: #0088ff; 
+      font-size: 1.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     
     .step-list { list-style: none; }
     .step-item {
-      background: #2a2a2a; padding: 1rem; margin: 0.5rem 0; border-radius: 4px;
-      border-left: 4px solid #555; display: flex; align-items: center;
-      transition: all 0.3s;
+      background: rgba(255, 255, 255, 0.03); 
+      padding: 1.5rem; 
+      margin: 0.75rem 0; 
+      border-radius: 12px;
+      border-left: 5px solid rgba(255, 255, 255, 0.2); 
+      display: flex; 
+      align-items: center;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      backdrop-filter: blur(10px);
     }
-    .step-item.active { border-left-color: #0088ff; background: #1a3a5a; }
-    .step-item.completed { border-left-color: #28a745; opacity: 0.7; }
+    .step-item:hover {
+      transform: translateX(4px);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 4px 16px rgba(0, 136, 255, 0.2);
+    }
+    .step-item.active { 
+      border-left-color: #0088ff; 
+      background: linear-gradient(90deg, rgba(0, 136, 255, 0.2) 0%, rgba(0, 136, 255, 0.05) 100%);
+      box-shadow: 0 4px 16px rgba(0, 136, 255, 0.3);
+    }
+    .step-item.completed { 
+      border-left-color: #28a745; 
+      opacity: 0.6;
+      background: linear-gradient(90deg, rgba(40, 167, 69, 0.15) 0%, rgba(40, 167, 69, 0.03) 100%);
+    }
     
     .step-number {
-      width: 40px; height: 40px; background: #555; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; margin-right: 1rem; flex-shrink: 0;
+      width: 50px; 
+      height: 50px; 
+      background: linear-gradient(135deg, #555 0%, #444 100%); 
+      border-radius: 50%;
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      font-weight: bold; 
+      margin-right: 1.5rem; 
+      flex-shrink: 0;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s;
     }
-    .step-item.active .step-number { background: #0088ff; }
-    .step-item.completed .step-number { background: #28a745; }
+    .step-item.active .step-number { 
+      background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%); 
+      box-shadow: 0 4px 16px rgba(0, 136, 255, 0.5);
+      transform: scale(1.1);
+    }
+    .step-item.completed .step-number { 
+      background: linear-gradient(135deg, #28a745 0%, #218838 100%); 
+      box-shadow: 0 4px 16px rgba(40, 167, 69, 0.4);
+    }
     
     .step-content { flex: 1; }
     .step-name { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.25rem; }
@@ -81,22 +212,70 @@
     .msg.error { background: #881f1f; color: #faa; }
     
     .progress-bar {
-      height: 8px; background: #333; border-radius: 4px; overflow: hidden; margin: 1rem 0;
+      height: 12px; 
+      background: rgba(255, 255, 255, 0.05); 
+      border-radius: 20px; 
+      overflow: hidden; 
+      margin: 1.5rem 0;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
     .progress-fill {
-      height: 100%; background: linear-gradient(90deg, #0088ff, #00ff88);
-      transition: width 0.5s;
+      height: 100%; 
+      background: linear-gradient(90deg, #0088ff 0%, #00ff88 100%);
+      transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      animation: shimmer 2s infinite;
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
     }
     
     .stats {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 1rem; margin: 1rem 0;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.25rem; margin: 1.5rem 0;
     }
     .stat-box {
-      background: #2a2a2a; padding: 1rem; border-radius: 4px; text-align: center;
+      background: rgba(255, 255, 255, 0.03); 
+      padding: 1.5rem; 
+      border-radius: 12px; 
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s;
+      backdrop-filter: blur(10px);
     }
-    .stat-value { font-size: 2rem; font-weight: bold; color: #0088ff; }
-    .stat-label { font-size: 0.85rem; color: #aaa; margin-top: 0.25rem; }
+    .stat-box:hover {
+      transform: translateY(-4px);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 20px rgba(0, 136, 255, 0.2);
+    }
+    .stat-value { 
+      font-size: 2.5rem; 
+      font-weight: 700; 
+      background: linear-gradient(135deg, #0088ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .stat-label { 
+      font-size: 0.9rem; 
+      color: #aaa; 
+      margin-top: 0.5rem; 
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
@@ -142,6 +321,14 @@
       <button class="btn" id="plan-btn" onclick="planHop()">🗺️ Plan Route</button>
       <button class="btn btn-secondary" id="reset-btn" onclick="resetHop()" style="display:none">↺ Reset</button>
       <div id="planner-msg"></div>
+      
+      <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(0, 136, 255, 0.1); border-left: 4px solid #0088ff; border-radius: 8px; font-size: 0.9rem; line-height: 1.6;">
+        <strong>💡 How it works:</strong><br>
+        1. Enter target coordinates (or use Sky Map to find them)<br>
+        2. System finds bright stars along the path<br>
+        3. Navigate step-by-step: <strong>GOTO → Center → SYNC → Next</strong><br>
+        4. Each SYNC improves mount alignment accuracy
+      </div>
     </div>
 
     <!-- Steps Section -->
@@ -243,14 +430,16 @@
               Alt ${step.alt_deg.toFixed(1)}° / Az ${step.az_deg.toFixed(1)}°
             </div>
             <div class="step-info">
-              ${step.mag ? `Mag ${step.mag.toFixed(1)} | ` : ''}
-              Distance from prev: ${step.distance_from_prev.toFixed(1)}° | 
-              To target: ${step.distance_to_target.toFixed(1)}°
+              ${step.mag ? `⭐ Mag ${step.mag.toFixed(1)} | ` : '🎯 TARGET | '}
+              📏 ${step.distance_from_prev.toFixed(1)}° from prev | 
+              🎯 ${step.distance_to_target.toFixed(1)}° to target
             </div>
           </div>
           <div class="step-actions">
-            <button class="btn" onclick="gotoStep(${i})">GOTO</button>
-            <button class="btn btn-success" onclick="confirmStep(${i + 1})" style="display:none" id="confirm-${i}">✓ Confirm</button>
+            <button class="btn" onclick="gotoStep(${i})" id="goto-${i}">🎯 GOTO</button>
+            <button class="btn btn-success" onclick="syncStep(${i})" style="display:none" id="sync-${i}">🔄 SYNC</button>
+            <button class="btn btn-secondary" onclick="skipStep(${i + 1})" style="display:none" id="skip-${i}">⏭️ Skip</button>
+            <button class="btn btn-success" onclick="confirmStep(${i + 1})" style="display:none" id="confirm-${i}">✓ Next</button>
           </div>
         `;
         list.appendChild(li);
@@ -302,7 +491,7 @@
 
     async function gotoStep(index) {
       const step = session.steps[index];
-      showStepsMsg(`Going to ${step.name}...`, 'info');
+      showStepsMsg(`🚀 Slewing to ${step.name}...`, 'info');
 
       try {
         const resp = await fetch(`${API_BASE}/goto`, {
@@ -316,10 +505,41 @@
         const data = await resp.json();
 
         if (data.ok) {
-          showStepsMsg(`Slewed to ${step.name}. Center star and confirm.`, 'success');
+          showStepsMsg(`✓ Arrived at ${step.name}. Center the star in eyepiece/camera, then click SYNC.`, 'success');
+          document.getElementById(`goto-${index}`).style.display = 'none';
+          document.getElementById(`sync-${index}`).style.display = 'inline-block';
+          document.getElementById(`skip-${index}`).style.display = 'inline-block';
+        } else {
+          showStepsMsg(`❌ GOTO failed: ${JSON.stringify(data)}`, 'error');
+        }
+      } catch (e) {
+        showStepsMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function syncStep(index) {
+      const step = session.steps[index];
+      showStepsMsg(`Syncing on ${step.name}...`, 'info');
+
+      try {
+        // Send SYNC command to mount
+        const resp = await fetch(`${API_BASE}/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ra_deg: step.ra_deg,
+            dec_deg: step.dec_deg
+          })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          showStepsMsg(`✓ Synced on ${step.name}! Alignment improved. Click NEXT to continue.`, 'success');
+          document.getElementById(`sync-${index}`).style.display = 'none';
+          document.getElementById(`skip-${index}`).style.display = 'none';
           document.getElementById(`confirm-${index}`).style.display = 'inline-block';
         } else {
-          showStepsMsg(`GOTO failed: ${JSON.stringify(data)}`, 'error');
+          showStepsMsg(`❌ SYNC failed: ${JSON.stringify(data)}`, 'error');
         }
       } catch (e) {
         showStepsMsg(`Error: ${e.message}`, 'error');
@@ -341,7 +561,37 @@
           if (data.completed) {
             showStepsMsg('🎉 Star-hopping complete! Target reached.', 'success');
           } else {
-            showStepsMsg(`Step confirmed! Moving to next: ${data.next_step.name}`, 'success');
+            showStepsMsg(`✓ Step confirmed! Next: ${data.next_step.name}`, 'success');
+          }
+          await refreshStatus();
+        } else {
+          showStepsMsg(`Error: ${JSON.stringify(data)}`, 'error');
+        }
+      } catch (e) {
+        showStepsMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function skipStep(stepNum) {
+      if (!confirm('Skip this step? You will move to the next star without syncing.')) {
+        return;
+      }
+      
+      showStepsMsg('Skipping step...', 'info');
+
+      try {
+        const resp = await fetch(`${API_BASE}/hop/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step_number: stepNum })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          if (data.completed) {
+            showStepsMsg('🎉 Star-hopping complete! Target reached.', 'success');
+          } else {
+            showStepsMsg(`⏭️ Skipped! Next: ${data.next_step.name}`, 'info');
           }
           await refreshStatus();
         } else {

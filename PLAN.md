@@ -27,6 +27,9 @@
 - [x] Planner /api/plan-hop e /api/next-hop: corridoi Gaia con vincoli magnitudine/distanza/altezza; tempo di risposta < 200 ms con catalogo locale.
 - [x] Pagina ui/hop.html: lista passi, GOTO/Confermato→:CM→prossimo, re-plan e skip passo.
 - [x] Algoritmo greedy arc-length minimization con constraint alt>20° e mag<4
+- [x] UI moderna con gradiente, animazioni, progress bar interattiva
+- [x] Workflow completo: GOTO → Center → SYNC → NEXT con possibilità di skip
+- [x] Test suite completo con MockConnection (test_hop.py)
 
 ## Milestone 5 – Automation & Sequencing (NEXT)
 - [ ] Sequence editor: CRUD su sequenze (name, steps con parametri)
@@ -53,7 +56,9 @@
 ---
 
 ## 🎯 Stato Attuale
+- **Star Hopping completo: UI moderna, algoritmo efficiente, workflow guidato GOTO→SYNC→NEXT**
 - **Camera control completo: device mgmt, exposure/gain/binning, FITS export, statistics**
+- **Watec 910BD: controllo TACOS completo, recording video, sequenze immagini**
 
 ### 🔄 In Corso (Phase 2)
 - **Milestone 5**: Automation & Sequencing (prossima)
