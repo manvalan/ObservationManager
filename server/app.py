@@ -15,6 +15,7 @@ from lx200.connection import SerialConnection, MockConnection, detect_serial_por
 from lx200.protocol import LX200, parse_ra, parse_dec
 from lx200.catalog import resolve_name
 from lx200.catalog import resolve_id_via_gaia
+from server.camera import camera_controller
 
 import os
 import json
@@ -680,6 +681,209 @@ def _mjpeg_generator(camera_index: int = 0):
 def api_video(camera_index: int = 0):
     try:
         return StreamingResponse(_mjpeg_generator(camera_index), media_type='multipart/x-mixed-replace; boundary=frame')
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# -------- Camera Control API --------
+
+@app.get("/api/camera/devices")
+def api_camera_list_devices():
+    """Lista tutti i device video disponibili."""
+    try:
+        devices = camera_controller.list_devices(max_check=10)
+        return {"devices": devices, "count": len(devices)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/open")
+def api_camera_open(device_index: int = 0):
+    """Apre device camera e ritorna capabilities."""
+    try:
+        result = camera_controller.open_device(device_index)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/camera/close")
+def api_camera_close():
+    """Chiude device camera corrente."""
+    try:
+        camera_controller.close_device()
+        return {"status": "closed"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+class CameraSettingsBody(BaseModel):
+    exposure: Optional[int] = Field(None, description="Esposizione ms (-1=auto)")
+    gain: Optional[int] = Field(None, description="Gain 0-100 (-1=auto)")
+    binning: Optional[int] = Field(None, description="Binning 1/2/4")
+    width: Optional[int] = Field(None, description="Larghezza frame")
+    height: Optional[int] = Field(None, description="Altezza frame")
+    fps: Optional[float] = Field(None, description="Frame rate")
+
+
+@app.get("/api/camera/settings")
+def api_camera_get_settings():
+    """Ritorna settings camera correnti."""
+    return camera_controller.get_settings()
+
+
+@app.post("/api/camera/settings")
+def api_camera_update_settings(body: CameraSettingsBody):
+    """Aggiorna settings camera."""
+    try:
+        kwargs = {k: v for k, v in body.dict().items() if v is not None}
+        settings = camera_controller.update_settings(**kwargs)
+        return {"status": "updated", "settings": settings}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/camera/start")
+def api_camera_start_capture():
+    """Avvia capture continua."""
+    try:
+        camera_controller.start_capture()
+        return {"status": "capturing", "message": "Capture started"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/camera/stop")
+def api_camera_stop_capture():
+    """Ferma capture continua."""
+    try:
+        camera_controller.stop_capture()
+        return {"status": "stopped", "message": "Capture stopped"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/camera/frame")
+def api_camera_get_frame():
+    """Ritorna ultimo frame come base64 JPEG."""
+    try:
+        import base64
+        frame = camera_controller.get_frame()
+        if frame is None:
+            raise HTTPException(status_code=404, detail="No frame available")
+        
+        # Encode come JPEG
+        ok, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        if not ok:
+            raise HTTPException(status_code=500, detail="JPEG encode failed")
+        
+        # Base64 encode
+        jpg_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return {
+            "frame": jpg_base64,
+            "width": frame.shape[1],
+            "height": frame.shape[0],
+            "format": "jpeg"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/capture")
+def api_camera_capture_single():
+    """Cattura singolo frame e ritorna statistics."""
+    try:
+        frame = camera_controller.capture_single(timeout=5.0)
+        stats = camera_controller.compute_statistics(frame)
+        
+        return {
+            "status": "captured",
+            "width": frame.shape[1],
+            "height": frame.shape[0],
+            "statistics": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/camera/statistics")
+def api_camera_statistics():
+    """Calcola e ritorna statistiche ultimo frame."""
+    try:
+        stats = camera_controller.compute_statistics()
+        if not stats:
+            raise HTTPException(status_code=404, detail="No frame available")
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/camera/fwhm")
+def api_camera_fwhm():
+    """Stima FWHM per valutazione focus."""
+    try:
+        fwhm = camera_controller.estimate_fwhm()
+        return {
+            "fwhm": fwhm,
+            "unit": "pixels",
+            "quality": "good" if 2.0 < fwhm < 5.0 else "poor" if fwhm > 0 else "no_stars"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SaveFitsBody(BaseModel):
+    filename: Optional[str] = Field(None, description="Nome file (auto se omesso)")
+    target: Optional[str] = Field(None, description="Nome target")
+    ra: Optional[float] = Field(None, description="RA gradi")
+    dec: Optional[float] = Field(None, description="Dec gradi")
+    telescope: Optional[str] = Field(None, description="Nome telescopio")
+    observer: Optional[str] = Field(None, description="Nome osservatore")
+
+
+@app.post("/api/camera/save-fits")
+def api_camera_save_fits(body: SaveFitsBody):
+    """Cattura frame e salva come FITS con metadata."""
+    try:
+        # Cattura frame
+        frame = camera_controller.capture_single(timeout=5.0)
+        
+        # Prepara metadata
+        metadata = {}
+        if body.target:
+            metadata['OBJECT'] = body.target
+        if body.ra is not None:
+            metadata['RA'] = body.ra
+        if body.dec is not None:
+            metadata['DEC'] = body.dec
+        if body.telescope:
+            metadata['TELESCOP'] = body.telescope
+        if body.observer:
+            metadata['OBSERVER'] = body.observer
+        
+        # Aggiungi sito da settings
+        if site_settings.get("latitude"):
+            metadata['SITELAT'] = site_settings["latitude"]
+            metadata['SITELONG'] = site_settings["longitude"]
+            metadata['SITEELEV'] = site_settings["elevation"]
+        
+        # Salva FITS
+        filepath = camera_controller.save_fits(frame, body.filename or "", metadata)
+        
+        # Calcola statistiche
+        stats = camera_controller.compute_statistics(frame)
+        
+        return {
+            "status": "saved",
+            "filepath": filepath,
+            "filename": pathlib.Path(filepath).name,
+            "statistics": stats
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

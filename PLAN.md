@@ -23,19 +23,27 @@
 - [x] Interactive pan/zoom + cursor position tracking
 - [x] Fallback a bright stars list se Gaia unavailable
 
-## Milestone 4 – Star hopping
-- [ ] Planner /api/plan-hop e /api/next-hop: corridoi Gaia con vincoli magnitudine/distanza/altezza; tempo di risposta < 200 ms con catalogo locale.
-- [ ] Pagina ui/hop.html: lista passi, GOTO/Confermato→:CM→prossimo, re-plan e skip passo.
-- [ ] Algoritmo greedy arc-length minimization con constraint alt>20° e mag<4
+## Milestone 4 – Star hopping ✓ COMPLETATO
+- [x] Planner /api/plan-hop e /api/next-hop: corridoi Gaia con vincoli magnitudine/distanza/altezza; tempo di risposta < 200 ms con catalogo locale.
+- [x] Pagina ui/hop.html: lista passi, GOTO/Confermato→:CM→prossimo, re-plan e skip passo.
+- [x] Algoritmo greedy arc-length minimization con constraint alt>20° e mag<4
 
-## Milestone 5 – Automation & Sequencing
+## Milestone 5 – Automation & Sequencing (NEXT)
 - [ ] Sequence editor: CRUD su sequenze (name, steps con parametri)
 - [ ] Execution engine: esegui step-by-step con pause/resume/abort
 - [ ] Imaging integration: trigger camera, metadata FITS, real-time preview
 - [ ] Scripting support (optional): DSL semplice per sequenze avanzate
 
-## Milestone 6 – Logging, test, docs
+## Milestone 6 – Camera Control ✓ COMPLETATO
+- [x] CameraController class: gestione multi-device, settings (exposure/gain/binning)
+- [x] API complete: /api/camera/devices, open, settings, capture, statistics, fwhm, save-fits
+- [x] UI camera.html: device selection, controls, live preview, histogram, FWHM
+- [x] FITS export con metadata completo (target, coords, site, exposure)
+- [x] Statistiche avanzate: histogram, SNR, FWHM per focus assist
+
+## Milestone 7 – Logging, test, docs
 - [x] Virtual mount driver (MockConnection) con simulazione realistica
+- [x] Test suite: test_mock.py, test_hop.py, test_camera.py
 - [ ] Persistenza sessione completa (allineamenti, sync, target), export JSON.
 - [ ] Unit test conversioni, mock LX200, smoke REST uvicorn+httpx.
 - [ ] Documentazione flussi Align/Planetario/Hop, setup Gaia/camera, troubleshooting.
@@ -45,21 +53,23 @@
 ---
 
 ## 🎯 Stato Attuale
+- **Camera control completo: device mgmt, exposure/gain/binning, FITS export, statistics**
 
-### ✅ Completato (Phase 1)
-- Core infrastructure (CLI, Web API, Mock driver)
-- Precision pointing con Skyfield + refraction
-- Catalog integration (Gaia, SAO/HIP/HD)
-- Multi-star alignment con camera overlay
-- Interactive sky planetario
-
-### 🔄 In Corso
-- **Mock Driver Enhancement**: Simulazione realistica montatura completa
-- **Documentation**: ROADMAP.md e CONTRIBUTING.md creati
+### 🔄 In Corso (Phase 2)
+- **Milestone 5**: Automation & Sequencing (prossima)
+- **Milestone 7**: Session Management & Persistence (test coverage)
 
 ### 📋 Prossimi Passi Immediati
-1. **Testing del Mock Driver**: Verificare simulazione con UI web
-2. **Star-Hopping Algorithm**: Implementare pathfinding tra stelle
+1. **Sequence Automation**: Editor e execution engine per sequenze osservative
+2. **Session Persistence**: SQLite/JSON per log osservazioni e export dati
+
+### 🔄 In Corso (Phase 2)
+- **Milestone 5**: Automation & Sequencing (prossima)
+- **Milestone 7**: Session Management & Persistence
+
+### 📋 Prossimi Passi Immediati
+1. **Session Persistence**: SQLite/JSON per log osservazioni
+2. **Sequence Editor**: CRUD operations per sequenze automatiche
 3. **Unit Tests**: Aumentare coverage > 80%
 
 ---
@@ -119,8 +129,8 @@ Vedi **[ROADMAP.md](ROADMAP.md)** per:
 
 ---
 
-**Prossima milestone**: Star-Hopping Planner (Milestone 4)  
-**Versione corrente**: 0.3.0  
+**Prossima milestone**: Automation & Sequencing (Milestone 5)  
+**Versione corrente**: 0.4.0 (Phase 2 - 40%)  
 **Ultimo aggiornamento**: Gennaio 2026
 
 Vedi [ROADMAP.md](ROADMAP.md) per roadmap completa con timeline e dettagli architetturali.
