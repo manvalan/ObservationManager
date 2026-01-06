@@ -1834,3 +1834,342 @@ def api_export_session(session_id: str):
     
     return {"ok": True, "data": export_data}
 
+
+# ============================================================================
+# Analytics Endpoints (M9)
+# ============================================================================
+
+@app.get("/api/analytics/summary")
+def api_analytics_summary():
+    """Get global analytics summary.
+    
+    Returns:
+        - total_sessions: Number of recorded sessions
+        - total_observations: Total observations across all sessions
+        - total_alignments: Total alignment points
+        - mean_alignment_residual: Average residual in arcminutes
+        - total_observation_time: Total integration time in seconds
+        - unique_objects: Number of unique objects observed
+    """
+    sessions = SessionManager.get_all_sessions_with_stats()
+    
+    total_sessions = len(sessions)
+    total_observations = sum(s.get("observation_count", 0) for s in sessions)
+    total_alignments = sum(s.get("alignment_count", 0) for s in sessions)
+    
+    residuals = [s.get("alignment_residual_mean", 0) for s in sessions if s.get("alignment_residual_mean")]
+    mean_residual = sum(residuals) / len(residuals) if residuals else 0
+    
+    total_time = sum(s.get("total_observation_time_sec", 0) for s in sessions)
+    
+    # Count unique objects
+    unique_objects = set()
+    for session in sessions:
+        if session.get("observations"):
+            for obs in session.get("observations", []):
+                unique_objects.add(obs.get("object_name", "Unknown"))
+    
+    return {
+        "ok": True,
+        "data": {
+            "total_sessions": total_sessions,
+            "total_observations": total_observations,
+            "total_alignments": total_alignments,
+            "mean_alignment_residual": round(mean_residual, 2),
+            "total_observation_time_sec": total_time,
+            "unique_objects": len(unique_objects),
+            "objects": list(unique_objects)[:20]  # Top 20 objects
+        }
+    }
+
+
+@app.get("/api/analytics/sessions")
+def api_analytics_sessions(limit: int = Query(100, ge=1, le=1000)):
+    """Get sessions with computed statistics for dashboard.
+    
+    Returns list of sessions with:
+        - id, target_name, target_ra, target_dec
+        - created_at, observation_count, alignment_count
+        - alignment_residual_mean, total_observation_time_sec
+    """
+    sessions = SessionManager.get_all_sessions_with_stats()
+    
+    # Sort by date, newest first
+    sessions.sort(key=lambda s: s.get("created_at", ""), reverse=True)
+    
+    return {
+        "ok": True,
+        "data": {
+            "sessions": sessions[:limit],
+            "total": len(sessions)
+        }
+    }
+
+
+@app.get("/api/analytics/alignments")
+def api_analytics_alignments(session_id: Optional[str] = None):
+    """Get alignment statistics.
+    
+    If session_id provided, returns alignments for that session.
+    Otherwise returns stats across all sessions.
+    """
+    if session_id:
+        alignments = SessionManager.get_session_alignments(session_id)
+        residuals = [a.get("residual_arcmin", 0) for a in alignments]
+        
+        return {
+            "ok": True,
+            "data": {
+                "session_id": session_id,
+                "alignment_count": len(alignments),
+                "mean_residual": round(sum(residuals) / len(residuals), 2) if residuals else 0,
+                "min_residual": min(residuals) if residuals else 0,
+                "max_residual": max(residuals) if residuals else 0,
+                "alignments": alignments
+            }
+        }
+    else:
+        # Global alignment stats
+        sessions = SessionManager.get_all_sessions_with_stats()
+        all_residuals = []
+        
+        for session in sessions:
+            if session.get("alignments"):
+                for align in session.get("alignments", []):
+                    all_residuals.append(align.get("residual_arcmin", 0))
+        
+        return {
+            "ok": True,
+            "data": {
+                "total_alignments": len(all_residuals),
+                "mean_residual": round(sum(all_residuals) / len(all_residuals), 2) if all_residuals else 0,
+                "min_residual": min(all_residuals) if all_residuals else 0,
+                "max_residual": max(all_residuals) if all_residuals else 0
+            }
+        }
+
+
+@app.get("/api/analytics/observations")
+def api_analytics_observations(session_id: Optional[str] = None):
+    """Get observation statistics.
+    
+    Returns:
+        - observation_count, total_integration_time
+        - objects observed and their frequencies
+        - duration statistics
+    """
+    if session_id:
+        observations = SessionManager.get_session_observations(session_id)
+        
+        object_counts = {}
+        total_duration = 0
+        durations = []
+        
+        for obs in observations:
+            obj = obs.get("object_name", "Unknown")
+            object_counts[obj] = object_counts.get(obj, 0) + 1
+            duration = obs.get("duration_sec", 0)
+            total_duration += duration
+            durations.append(duration)
+        
+        return {
+            "ok": True,
+            "data": {
+                "session_id": session_id,
+                "observation_count": len(observations),
+                "total_duration_sec": total_duration,
+                "mean_duration_sec": sum(durations) / len(durations) if durations else 0,
+                "objects": object_counts,
+                "observations": observations
+            }
+        }
+    else:
+        # Global observation stats
+        sessions = SessionManager.get_all_sessions_with_stats()
+        object_counts = {}
+        total_duration = 0
+        
+        for session in sessions:
+            for obs in session.get("observations", []):
+                obj = obs.get("object_name", "Unknown")
+                object_counts[obj] = object_counts.get(obj, 0) + 1
+                total_duration += obs.get("duration_sec", 0)
+        
+        return {
+            "ok": True,
+            "data": {
+                "total_observations": sum(len(s.get("observations", [])) for s in sessions),
+                "total_duration_sec": total_duration,
+                "objects": object_counts,
+                "unique_objects": len(object_counts)
+            }
+        }
+
+
+@app.get("/api/analytics/timeline")
+def api_analytics_timeline(days: int = Query(30, ge=1, le=365)):
+    """Get observation timeline for last N days.
+    
+    Returns daily observation counts for graphing.
+    """
+    from datetime import datetime, timedelta
+    
+    sessions = SessionManager.get_all_sessions_with_stats()
+    timeline = {}
+    
+    # Initialize last N days
+    today = datetime.now().date()
+    for i in range(days):
+        date = today - timedelta(days=i)
+        timeline[date.isoformat()] = 0
+    
+    # Count observations by day
+    for session in sessions:
+        try:
+            created = datetime.fromisoformat(session.get("created_at", "")).date()
+            date_key = created.isoformat()
+            
+            if date_key in timeline:
+                timeline[date_key] += session.get("observation_count", 0)
+        except:
+            pass
+    
+    # Sort by date
+    sorted_timeline = sorted(timeline.items())
+    
+    return {
+        "ok": True,
+        "data": {
+            "dates": [item[0] for item in sorted_timeline],
+            "counts": [item[1] for item in sorted_timeline],
+            "days": days
+        }
+    }
+
+
+@app.get("/api/analytics/magnitude-distribution")
+def api_analytics_magnitude_distribution(session_id: Optional[str] = None):
+    """Get magnitude distribution of observed objects.
+    
+    Returns histogram data for magnitude ranges.
+    """
+    if session_id:
+        observations = SessionManager.get_session_observations(session_id)
+    else:
+        sessions = SessionManager.get_all_sessions_with_stats()
+        observations = []
+        for session in sessions:
+            observations.extend(session.get("observations", []))
+    
+    # Bin magnitudes into ranges
+    bins = {}
+    for obs in observations:
+        # Use estimated magnitude from object database if available
+        # For now, just count by object name
+        obj = obs.get("object_name", "Unknown")
+        bins[obj] = bins.get(obj, 0) + 1
+    
+    return {
+        "ok": True,
+        "data": {
+            "objects": list(bins.keys()),
+            "counts": list(bins.values()),
+            "total": len(observations)
+        }
+    }
+
+
+@app.get("/api/analytics/quality-metrics")
+def api_analytics_quality_metrics(session_id: Optional[str] = None):
+    """Get quality metrics: alignment residuals, observation duration, etc.
+    
+    Useful for assessing observation session quality.
+    """
+    if session_id:
+        session_data = SessionManager.get_session_summary(session_id)
+        alignments = SessionManager.get_session_alignments(session_id)
+        observations = SessionManager.get_session_observations(session_id)
+    else:
+        sessions = SessionManager.get_all_sessions_with_stats()
+        session_data = None
+        alignments = []
+        observations = []
+        for s in sessions:
+            alignments.extend(s.get("alignments", []))
+            observations.extend(s.get("observations", []))
+    
+    residuals = [a.get("residual_arcmin", 0) for a in alignments]
+    durations = [o.get("duration_sec", 0) for o in observations]
+    
+    return {
+        "ok": True,
+        "data": {
+            "alignment_quality": {
+                "count": len(alignments),
+                "mean_residual": round(sum(residuals) / len(residuals), 2) if residuals else 0,
+                "std_residual": round((sum((x - (sum(residuals)/len(residuals)))**2 for x in residuals) / len(residuals))**0.5, 2) if residuals else 0,
+                "status": "excellent" if (sum(residuals)/len(residuals) if residuals else 0) < 2 else "good" if (sum(residuals)/len(residuals) if residuals else 0) < 5 else "fair"
+            },
+            "observation_statistics": {
+                "count": len(observations),
+                "total_duration_sec": sum(durations),
+                "mean_duration_sec": round(sum(durations) / len(durations), 1) if durations else 0
+            }
+        }
+    }
+
+
+# Helper method to get all sessions with computed stats
+class _SessionStatsHelper:
+    @staticmethod
+    def get_all_sessions_with_stats():
+        """Internal helper to get sessions with stats for analytics."""
+        import sqlite3
+        db_path = "data/sessions.db"
+        
+        sessions = []
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            
+            # Get all sessions
+            cur.execute("SELECT * FROM sessions ORDER BY created_at DESC")
+            session_rows = cur.fetchall()
+            
+            for row in session_rows:
+                session_id = row["id"]
+                session = dict(row)
+                
+                # Count alignments
+                cur.execute("SELECT COUNT(*) as cnt, AVG(residual_arcmin) as mean_res FROM alignments WHERE session_id = ?", (session_id,))
+                align = cur.fetchone()
+                session["alignment_count"] = align["cnt"] or 0
+                session["alignment_residual_mean"] = align["mean_res"] or 0
+                
+                # Count observations
+                cur.execute("SELECT COUNT(*) as cnt, SUM(duration_sec) as total FROM observations WHERE session_id = ?", (session_id,))
+                obs = cur.fetchone()
+                session["observation_count"] = obs["cnt"] or 0
+                session["total_observation_time_sec"] = obs["total"] or 0
+                
+                # Get alignments detail
+                cur.execute("SELECT * FROM alignments WHERE session_id = ? ORDER BY timestamp", (session_id,))
+                session["alignments"] = [dict(a) for a in cur.fetchall()]
+                
+                # Get observations detail
+                cur.execute("SELECT * FROM observations WHERE session_id = ? ORDER BY timestamp", (session_id,))
+                session["observations"] = [dict(o) for o in cur.fetchall()]
+                
+                sessions.append(session)
+            
+            conn.close()
+        except Exception as e:
+            print(f"Error getting sessions: {e}")
+        
+        return sessions
+
+
+# Monkey patch SessionManager with helper
+SessionManager.get_all_sessions_with_stats = _SessionStatsHelper.get_all_sessions_with_stats
+

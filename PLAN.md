@@ -56,6 +56,30 @@
 - [x] Contributing guide con development workflow
 - [x] Roadmap completa per Phase 2-4
 
+## Milestone 8 – Advanced Imaging
+- [ ] Filter wheel support (seriale/USB)
+- [ ] Live stacking con alignment automatico
+- [ ] Calibration automation (dark, flat, bias)
+- [ ] FITS metadata + WCS projection
+
+## Milestone 9 – Analytics Dashboard ✓ COMPLETATO
+- [x] Analytics Dashboard UI (web/analytics.html con Charts.js)
+- [x] Session timeline (osservazioni per giorno)
+- [x] Alignment quality scatter plot (residui nel tempo)
+- [x] Observation statistics (conteggio per oggetto)
+- [x] Magnitude distribution histogram
+- [x] Quality metrics aggregation
+- [x] Backend endpoints (/api/analytics/*)
+- [x] Session details e alignment history tables
+- [x] Test suite (test_analytics.py - 6/6 passing)
+- [x] Documentazione (ANALYTICS_GUIDE.md)
+
+## Milestone 10 – Mobile App
+- [ ] CORS + WebSocket per real-time updates
+- [ ] React Native setup
+- [ ] Mobile device control UI
+- [ ] Live preview su dispositivi mobili
+
 ---
 
 ## 🎯 Stato Attuale
@@ -73,18 +97,7 @@ Tutte le funzionalità principali implementate e testate. Pronto per:
 
 ### 📋 Prossimi Passi (Phase 3)
 1. **Advanced Imaging**: Filter wheel, live stacking, calibration
-2. **Analytics Dashboard**: Visualizzazione dati sessioni
-3. **Mobile App**: Remote operations
-
-
-### 🔄 In Corso (Phase 2)
-- **Milestone 5**: Automation & Sequencing (prossima)
-- **Milestone 7**: Session Management & Persistence
-
-### 📋 Prossimi Passi Immediati
-1. **Session Persistence**: SQLite/JSON per log osservazioni
-2. **Sequence Editor**: CRUD operations per sequenze automatiche
-3. **Unit Tests**: Aumentare coverage > 80%
+2. **Mobile App**: Remote operations
 
 ---
 
@@ -94,6 +107,9 @@ Tutte le funzionalità principali implementate e testate. Pronto per:
 - **[ROADMAP.md](ROADMAP.md)**: Piano completo 4 phases (10-12 mesi)
 - **[CONTRIBUTING.md](CONTRIBUTING.md)**: Guide per contributors
 - **[PLAN.md](PLAN.md)**: Questo file - milestones tattiche
+- **[STAR_HOPPING_GUIDE.md](STAR_HOPPING_GUIDE.md)**: Star hopping navigator (M4)
+- **[SEQUENCE_AUTOMATION_GUIDE.md](SEQUENCE_AUTOMATION_GUIDE.md)**: Sequence editor & execution (M5)
+- **[ANALYTICS_GUIDE.md](ANALYTICS_GUIDE.md)**: Analytics dashboard (M9)
 
 ---
 
@@ -143,8 +159,8 @@ Vedi **[ROADMAP.md](ROADMAP.md)** per:
 
 ---
 
-**Prossima milestone**: Automation & Sequencing (Milestone 5)  
-**Versione corrente**: 0.4.0 (Phase 2 - 40%)  
+**Prossima milestone**: Advanced Imaging (Milestone 8)  
+**Versione corrente**: 0.5.0 (Phase 3 - 50% - Analytics Dashboard ✓)  
 **Ultimo aggiornamento**: Gennaio 2026
 
 Vedi [ROADMAP.md](ROADMAP.md) per roadmap completa con timeline e dettagli architetturali.
