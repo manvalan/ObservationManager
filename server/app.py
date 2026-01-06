@@ -682,3 +682,266 @@ def api_video(camera_index: int = 0):
         return StreamingResponse(_mjpeg_generator(camera_index), media_type='multipart/x-mixed-replace; boundary=frame')
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# -------- Star-Hopping Planner --------
+hop_session = {
+    "active": False,
+    "target_ra": None,
+    "target_dec": None,
+    "target_name": None,
+    "steps": [],
+    "current_step": 0,
+    "completed_steps": []
+}
+
+
+def _angular_distance(ra1, dec1, ra2, dec2):
+    """Calculate angular distance in degrees between two points."""
+    ra1r = math.radians(ra1)
+    dec1r = math.radians(dec1)
+    ra2r = math.radians(ra2)
+    dec2r = math.radians(dec2)
+    cosd = math.sin(dec1r) * math.sin(dec2r) + math.cos(dec1r) * math.cos(dec2r) * math.cos(ra1r - ra2r)
+    cosd = max(-1.0, min(1.0, cosd))
+    return math.degrees(math.acos(cosd))
+
+
+def _plan_star_hop(start_ra, start_dec, target_ra, target_dec, max_steps=5, max_mag=4.0, max_spacing=10.0):
+    """
+    Plan a star-hopping path from current position to target.
+    Uses greedy algorithm to find bright stars along the great circle path.
+    """
+    steps = []
+    current_ra = start_ra
+    current_dec = start_dec
+    
+    total_distance = _angular_distance(start_ra, start_dec, target_ra, target_dec)
+    if total_distance < max_spacing:
+        # Direct hop possible
+        return []
+    
+    for i in range(max_steps):
+        remaining = _angular_distance(current_ra, current_dec, target_ra, target_dec)
+        if remaining < max_spacing:
+            # Close enough to target
+            break
+        
+        # Search for stars in corridor toward target
+        # Use cone search centered on midpoint between current and target
+        mid_ra = (current_ra + target_ra) / 2
+        mid_dec = (current_dec + target_dec) / 2
+        radius = min(remaining / 2 + 5, 30.0)  # Adaptive search radius
+        
+        candidates = _gaia_lookup_cone(mid_ra, mid_dec, radius, max_mag, limit=100)
+        if not candidates:
+            # No stars found, fallback to direct hop
+            break
+        
+        # Filter and score candidates
+        cfg = _read_settings()
+        best_star = None
+        best_score = float('inf')
+        
+        for star in candidates:
+            # Check if star is above horizon
+            alt, az = ra_dec_to_altaz(star["ra_deg"], star["dec_deg"], cfg)
+            if alt < 20:
+                continue
+            
+            # Calculate distances
+            dist_from_current = _angular_distance(current_ra, current_dec, star["ra_deg"], star["dec_deg"])
+            dist_to_target = _angular_distance(star["ra_deg"], star["dec_deg"], target_ra, target_dec)
+            
+            # Skip if too close or too far
+            if dist_from_current < 2 or dist_from_current > max_spacing:
+                continue
+            
+            # Score: prefer stars that reduce distance to target and are bright
+            # Lower score is better
+            progress = remaining - dist_to_target
+            if progress < 0:
+                continue  # Star moves us away from target
+            
+            score = dist_to_target + (star.get("mag", 5.0) * 2) - (progress * 3)
+            
+            if score < best_score:
+                best_score = score
+                best_star = star
+        
+        if not best_star:
+            # No suitable star found
+            break
+        
+        # Add to path
+        alt, az = ra_dec_to_altaz(best_star["ra_deg"], best_star["dec_deg"], cfg)
+        steps.append({
+            "name": best_star.get("name", f"HOP-{i+1}"),
+            "ra_deg": best_star["ra_deg"],
+            "dec_deg": best_star["dec_deg"],
+            "alt_deg": alt,
+            "az_deg": az,
+            "mag": best_star.get("mag", 5.0),
+            "distance_from_prev": _angular_distance(current_ra, current_dec, best_star["ra_deg"], best_star["dec_deg"]),
+            "distance_to_target": _angular_distance(best_star["ra_deg"], best_star["dec_deg"], target_ra, target_dec)
+        })
+        
+        current_ra = best_star["ra_deg"]
+        current_dec = best_star["dec_deg"]
+    
+    return steps
+
+
+class PlanHopBody(BaseModel):
+    target_ra: float = Field(..., description="Target RA in degrees")
+    target_dec: float = Field(..., description="Target Dec in degrees")
+    target_name: Optional[str] = None
+    max_steps: int = Field(5, ge=1, le=10)
+    max_mag: float = Field(4.0, ge=0, le=10)
+    max_spacing: float = Field(10.0, ge=2, le=30)
+
+
+@app.post("/api/plan-hop")
+def api_plan_hop(body: PlanHopBody):
+    """
+    Plan star-hopping path to target.
+    Returns list of intermediate stars to guide telescope.
+    """
+    try:
+        # Get current position
+        lx = manager.get_lx200()
+        ra_str = lx.get_ra()
+        dec_str = lx.get_dec()
+        
+        # Parse to degrees
+        hh, mm, ss = [float(p) for p in ra_str.split(":")]
+        start_ra = (hh + mm/60 + ss/3600) * 15.0
+        
+        sign = -1 if dec_str.startswith('-') else 1
+        d_str, mmss = dec_str[1:].split('*')
+        m_str, s_str = mmss.split(":")
+        start_dec = sign * (float(d_str) + float(m_str)/60 + float(s_str)/3600)
+        
+        # Plan path
+        steps = _plan_star_hop(
+            start_ra, start_dec,
+            body.target_ra, body.target_dec,
+            body.max_steps, body.max_mag, body.max_spacing
+        )
+        
+        # Add final target
+        cfg = _read_settings()
+        target_alt, target_az = ra_dec_to_altaz(body.target_ra, body.target_dec, cfg)
+        final_step = {
+            "name": body.target_name or "TARGET",
+            "ra_deg": body.target_ra,
+            "dec_deg": body.target_dec,
+            "alt_deg": target_alt,
+            "az_deg": target_az,
+            "mag": None,
+            "distance_from_prev": _angular_distance(
+                steps[-1]["ra_deg"] if steps else start_ra,
+                steps[-1]["dec_deg"] if steps else start_dec,
+                body.target_ra, body.target_dec
+            ),
+            "distance_to_target": 0.0
+        }
+        steps.append(final_step)
+        
+        # Update session
+        hop_session["active"] = True
+        hop_session["target_ra"] = body.target_ra
+        hop_session["target_dec"] = body.target_dec
+        hop_session["target_name"] = body.target_name
+        hop_session["steps"] = steps
+        hop_session["current_step"] = 0
+        hop_session["completed_steps"] = []
+        
+        return {
+            "ok": True,
+            "steps": steps,
+            "total_steps": len(steps),
+            "estimated_time_minutes": len(steps) * 2  # Rough estimate
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/hop/status")
+def api_hop_status():
+    """Get current star-hopping session status."""
+    return {
+        "ok": True,
+        "session": hop_session
+    }
+
+
+@app.get("/api/hop/next")
+def api_hop_next():
+    """Get next step in star-hopping sequence."""
+    if not hop_session["active"]:
+        raise HTTPException(status_code=400, detail="No active hop session")
+    
+    if hop_session["current_step"] >= len(hop_session["steps"]):
+        return {
+            "ok": True,
+            "completed": True,
+            "message": "Star-hopping sequence complete!"
+        }
+    
+    step = hop_session["steps"][hop_session["current_step"]]
+    return {
+        "ok": True,
+        "step": step,
+        "step_number": hop_session["current_step"] + 1,
+        "total_steps": len(hop_session["steps"])
+    }
+
+
+class HopConfirmBody(BaseModel):
+    step_number: int
+
+
+@app.post("/api/hop/confirm")
+def api_hop_confirm(body: HopConfirmBody):
+    """Mark current step as completed and advance to next."""
+    if not hop_session["active"]:
+        raise HTTPException(status_code=400, detail="No active hop session")
+    
+    if body.step_number != hop_session["current_step"] + 1:
+        raise HTTPException(status_code=400, detail="Step number mismatch")
+    
+    # Mark completed
+    hop_session["completed_steps"].append(body.step_number)
+    hop_session["current_step"] += 1
+    
+    # Check if done
+    if hop_session["current_step"] >= len(hop_session["steps"]):
+        return {
+            "ok": True,
+            "completed": True,
+            "message": "Star-hopping complete! Target reached."
+        }
+    
+    # Return next step
+    next_step = hop_session["steps"][hop_session["current_step"]]
+    return {
+        "ok": True,
+        "completed": False,
+        "next_step": next_step,
+        "step_number": hop_session["current_step"] + 1,
+        "total_steps": len(hop_session["steps"])
+    }
+
+
+@app.post("/api/hop/reset")
+def api_hop_reset():
+    """Reset star-hopping session."""
+    hop_session["active"] = False
+    hop_session["target_ra"] = None
+    hop_session["target_dec"] = None
+    hop_session["target_name"] = None
+    hop_session["steps"] = []
+    hop_session["current_step"] = 0
+    hop_session["completed_steps"] = []
+    return {"ok": True, "message": "Hop session reset"}

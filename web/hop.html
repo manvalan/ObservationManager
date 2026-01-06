@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star-Hopping - Osservatorio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: #fff; }
+    .header {
+      padding: 1rem; background: #222; border-bottom: 2px solid #0088ff;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { font-size: 1.5rem; }
+    .nav { display: flex; gap: 0.5rem; }
+    .nav a { padding: 0.5rem 1rem; background: #0088ff; color: #fff; text-decoration: none; border-radius: 4px; }
+    .nav a:hover { background: #0066cc; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    
+    .planner-section {
+      background: #222; padding: 2rem; border-radius: 8px; margin-bottom: 2rem;
+    }
+    .planner-section h2 { margin-bottom: 1rem; color: #0088ff; }
+    
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem; margin-bottom: 1rem;
+    }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 0.9rem; margin-bottom: 0.25rem; color: #aaa; }
+    .form-group input {
+      padding: 0.5rem; background: #333; color: #fff; border: 1px solid #555;
+      border-radius: 4px; font-size: 1rem;
+    }
+    .form-group input:focus { outline: none; border-color: #0088ff; }
+    
+    .btn {
+      padding: 0.75rem 1.5rem; background: #0088ff; color: #fff; border: none;
+      border-radius: 4px; font-size: 1rem; cursor: pointer; transition: background 0.2s;
+    }
+    .btn:hover { background: #0066cc; }
+    .btn:disabled { background: #555; cursor: not-allowed; }
+    .btn-secondary { background: #555; }
+    .btn-secondary:hover { background: #666; }
+    .btn-success { background: #28a745; }
+    .btn-success:hover { background: #218838; }
+    
+    .steps-section {
+      background: #222; padding: 2rem; border-radius: 8px;
+    }
+    .steps-section h2 { margin-bottom: 1rem; color: #0088ff; }
+    
+    .step-list { list-style: none; }
+    .step-item {
+      background: #2a2a2a; padding: 1rem; margin: 0.5rem 0; border-radius: 4px;
+      border-left: 4px solid #555; display: flex; align-items: center;
+      transition: all 0.3s;
+    }
+    .step-item.active { border-left-color: #0088ff; background: #1a3a5a; }
+    .step-item.completed { border-left-color: #28a745; opacity: 0.7; }
+    
+    .step-number {
+      width: 40px; height: 40px; background: #555; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; margin-right: 1rem; flex-shrink: 0;
+    }
+    .step-item.active .step-number { background: #0088ff; }
+    .step-item.completed .step-number { background: #28a745; }
+    
+    .step-content { flex: 1; }
+    .step-name { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.25rem; }
+    .step-coords { font-size: 0.85rem; color: #aaa; font-family: 'Courier New', monospace; }
+    .step-info { font-size: 0.85rem; color: #888; margin-top: 0.25rem; }
+    
+    .step-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .step-actions button { padding: 0.5rem 1rem; }
+    
+    .msg { padding: 1rem; border-radius: 4px; margin: 1rem 0; }
+    .msg.info { background: #1f4788; color: #adf; }
+    .msg.success { background: #1f5f2f; color: #8fd; }
+    .msg.error { background: #881f1f; color: #faa; }
+    
+    .progress-bar {
+      height: 8px; background: #333; border-radius: 4px; overflow: hidden; margin: 1rem 0;
+    }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, #0088ff, #00ff88);
+      transition: width 0.5s;
+    }
+    
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem; margin: 1rem 0;
+    }
+    .stat-box {
+      background: #2a2a2a; padding: 1rem; border-radius: 4px; text-align: center;
+    }
+    .stat-value { font-size: 2rem; font-weight: bold; color: #0088ff; }
+    .stat-label { font-size: 0.85rem; color: #aaa; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔭 Star-Hopping Navigator</h1>
+    <div class="nav">
+      <a href="/ui/index.html">Home</a>
+      <a href="/ui/sky.html">Sky Map</a>
+      <a href="/ui/align.html">Align</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Planner Section -->
+    <div class="planner-section">
+      <h2>📍 Plan Star-Hopping Route</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Target RA (degrees)</label>
+          <input type="number" id="target-ra" step="0.1" placeholder="180.5">
+        </div>
+        <div class="form-group">
+          <label>Target Dec (degrees)</label>
+          <input type="number" id="target-dec" step="0.1" placeholder="45.2">
+        </div>
+        <div class="form-group">
+          <label>Target Name (optional)</label>
+          <input type="text" id="target-name" placeholder="M31">
+        </div>
+        <div class="form-group">
+          <label>Max Steps</label>
+          <input type="number" id="max-steps" value="5" min="1" max="10">
+        </div>
+        <div class="form-group">
+          <label>Max Magnitude</label>
+          <input type="number" id="max-mag" value="4.0" step="0.5" min="0" max="10">
+        </div>
+        <div class="form-group">
+          <label>Max Spacing (°)</label>
+          <input type="number" id="max-spacing" value="10.0" step="1" min="2" max="30">
+        </div>
+      </div>
+      <button class="btn" id="plan-btn" onclick="planHop()">🗺️ Plan Route</button>
+      <button class="btn btn-secondary" id="reset-btn" onclick="resetHop()" style="display:none">↺ Reset</button>
+      <div id="planner-msg"></div>
+    </div>
+
+    <!-- Steps Section -->
+    <div class="steps-section" id="steps-section" style="display:none">
+      <h2>📋 Navigation Steps</h2>
+      
+      <div class="stats" id="stats"></div>
+      
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      
+      <ul class="step-list" id="step-list"></ul>
+      
+      <div id="steps-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    let session = null;
+
+    async function planHop() {
+      const targetRa = parseFloat(document.getElementById('target-ra').value);
+      const targetDec = parseFloat(document.getElementById('target-dec').value);
+      const targetName = document.getElementById('target-name').value;
+      const maxSteps = parseInt(document.getElementById('max-steps').value);
+      const maxMag = parseFloat(document.getElementById('max-mag').value);
+      const maxSpacing = parseFloat(document.getElementById('max-spacing').value);
+
+      if (isNaN(targetRa) || isNaN(targetDec)) {
+        showPlannerMsg('Please enter valid RA and Dec coordinates', 'error');
+        return;
+      }
+
+      showPlannerMsg('Planning route...', 'info');
+      document.getElementById('plan-btn').disabled = true;
+
+      try {
+        const resp = await fetch(`${API_BASE}/plan-hop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target_ra: targetRa,
+            target_dec: targetDec,
+            target_name: targetName || null,
+            max_steps: maxSteps,
+            max_mag: maxMag,
+            max_spacing: maxSpacing
+          })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          showPlannerMsg(`Route planned! ${data.total_steps} steps (est. ${data.estimated_time_minutes} min)`, 'success');
+          session = data;
+          renderSteps(data.steps);
+          document.getElementById('steps-section').style.display = 'block';
+          document.getElementById('reset-btn').style.display = 'inline-block';
+          await refreshStatus();
+        } else {
+          showPlannerMsg(`Error: ${JSON.stringify(data)}`, 'error');
+        }
+      } catch (e) {
+        showPlannerMsg(`Error: ${e.message}`, 'error');
+      } finally {
+        document.getElementById('plan-btn').disabled = false;
+      }
+    }
+
+    async function refreshStatus() {
+      try {
+        const resp = await fetch(`${API_BASE}/hop/status`);
+        const data = await resp.json();
+        if (data.ok && data.session.active) {
+          updateProgress(data.session);
+        }
+      } catch (e) {
+        console.error('Status refresh failed:', e);
+      }
+    }
+
+    function renderSteps(steps) {
+      const list = document.getElementById('step-list');
+      list.innerHTML = '';
+
+      steps.forEach((step, i) => {
+        const li = document.createElement('li');
+        li.className = 'step-item';
+        li.id = `step-${i}`;
+        if (i === 0) li.classList.add('active');
+
+        li.innerHTML = `
+          <div class="step-number">${i + 1}</div>
+          <div class="step-content">
+            <div class="step-name">${step.name}</div>
+            <div class="step-coords">
+              RA ${step.ra_deg.toFixed(3)}° / Dec ${step.dec_deg.toFixed(3)}° | 
+              Alt ${step.alt_deg.toFixed(1)}° / Az ${step.az_deg.toFixed(1)}°
+            </div>
+            <div class="step-info">
+              ${step.mag ? `Mag ${step.mag.toFixed(1)} | ` : ''}
+              Distance from prev: ${step.distance_from_prev.toFixed(1)}° | 
+              To target: ${step.distance_to_target.toFixed(1)}°
+            </div>
+          </div>
+          <div class="step-actions">
+            <button class="btn" onclick="gotoStep(${i})">GOTO</button>
+            <button class="btn btn-success" onclick="confirmStep(${i + 1})" style="display:none" id="confirm-${i}">✓ Confirm</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+
+      updateStats(steps);
+    }
+
+    function updateStats(steps) {
+      const stats = document.getElementById('stats');
+      const completed = steps.filter((_, i) => document.getElementById(`step-${i}`)?.classList.contains('completed')).length;
+      const totalDist = steps.reduce((sum, s) => sum + (s.distance_from_prev || 0), 0);
+
+      stats.innerHTML = `
+        <div class="stat-box">
+          <div class="stat-value">${completed}/${steps.length}</div>
+          <div class="stat-label">Steps Completed</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">${totalDist.toFixed(1)}°</div>
+          <div class="stat-label">Total Distance</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">${(completed / steps.length * 100).toFixed(0)}%</div>
+          <div class="stat-label">Progress</div>
+        </div>
+      `;
+    }
+
+    function updateProgress(sessionData) {
+      const progress = (sessionData.current_step / sessionData.steps.length) * 100;
+      document.getElementById('progress-fill').style.width = `${progress}%`;
+
+      // Update step visual states
+      sessionData.steps.forEach((step, i) => {
+        const elem = document.getElementById(`step-${i}`);
+        if (!elem) return;
+
+        elem.classList.remove('active', 'completed');
+        if (i < sessionData.current_step) {
+          elem.classList.add('completed');
+        } else if (i === sessionData.current_step) {
+          elem.classList.add('active');
+        }
+      });
+
+      updateStats(sessionData.steps);
+    }
+
+    async function gotoStep(index) {
+      const step = session.steps[index];
+      showStepsMsg(`Going to ${step.name}...`, 'info');
+
+      try {
+        const resp = await fetch(`${API_BASE}/goto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ra_deg: step.ra_deg,
+            dec_deg: step.dec_deg
+          })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          showStepsMsg(`Slewed to ${step.name}. Center star and confirm.`, 'success');
+          document.getElementById(`confirm-${index}`).style.display = 'inline-block';
+        } else {
+          showStepsMsg(`GOTO failed: ${JSON.stringify(data)}`, 'error');
+        }
+      } catch (e) {
+        showStepsMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function confirmStep(stepNum) {
+      showStepsMsg('Confirming step...', 'info');
+
+      try {
+        const resp = await fetch(`${API_BASE}/hop/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step_number: stepNum })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          if (data.completed) {
+            showStepsMsg('🎉 Star-hopping complete! Target reached.', 'success');
+          } else {
+            showStepsMsg(`Step confirmed! Moving to next: ${data.next_step.name}`, 'success');
+          }
+          await refreshStatus();
+        } else {
+          showStepsMsg(`Error: ${JSON.stringify(data)}`, 'error');
+        }
+      } catch (e) {
+        showStepsMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function resetHop() {
+      try {
+        await fetch(`${API_BASE}/hop/reset`, { method: 'POST' });
+        session = null;
+        document.getElementById('steps-section').style.display = 'none';
+        document.getElementById('reset-btn').style.display = 'none';
+        showPlannerMsg('Session reset', 'info');
+      } catch (e) {
+        showPlannerMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    function showPlannerMsg(text, type = 'info') {
+      const msg = document.getElementById('planner-msg');
+      msg.innerHTML = `<div class="msg ${type}">${text}</div>`;
+      setTimeout(() => { if (type === 'info') msg.innerHTML = ''; }, 5000);
+    }
+
+    function showStepsMsg(text, type = 'info') {
+      const msg = document.getElementById('steps-msg');
+      msg.innerHTML = `<div class="msg ${type}">${text}</div>`;
+      setTimeout(() => { if (type === 'info') msg.innerHTML = ''; }, 5000);
+    }
+
+    // Load session on page load
+    window.addEventListener('load', async () => {
+      await refreshStatus();
+    });
+  </script>
+</body>
+</html>
