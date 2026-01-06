@@ -1,0 +1,17 @@
+[
+  {"name": "Sirius", "ra_deg": 101.28715533, "dec_deg": -16.71611586, "mag": -1.46},
+  {"name": "Canopus", "ra_deg": 95.98787783, "dec_deg": -52.69566167, "mag": -0.74},
+  {"name": "Arcturus", "ra_deg": 213.915300, "dec_deg": 19.182409, "mag": -0.05},
+  {"name": "Vega", "ra_deg": 279.23473479, "dec_deg": 38.78368896, "mag": 0.03},
+  {"name": "Capella", "ra_deg": 79.17232794, "dec_deg": 45.99799147, "mag": 0.08},
+  {"name": "Rigel", "ra_deg": 78.63446707, "dec_deg": -8.20163837, "mag": 0.18},
+  {"name": "Procyon", "ra_deg": 114.825493, "dec_deg": 5.225, "mag": 0.34},
+  {"name": "Achernar", "ra_deg": 24.4286, "dec_deg": -57.2367, "mag": 0.46},
+  {"name": "Betelgeuse", "ra_deg": 88.792939, "dec_deg": 7.407064, "mag": 0.50},
+  {"name": "Hadar", "ra_deg": 210.9559, "dec_deg": -60.3731, "mag": 0.61},
+  {"name": "Altair", "ra_deg": 297.695827, "dec_deg": 8.868322, "mag": 0.77},
+  {"name": "Acrux", "ra_deg": 186.6496, "dec_deg": -63.0991, "mag": 0.77},
+  {"name": "Aldebaran", "ra_deg": 68.980163, "dec_deg": 16.509302, "mag": 0.85},
+  {"name": "Antares", "ra_deg": 247.3519, "dec_deg": -26.4320, "mag": 1.06},
+  {"name": "Spica", "ra_deg": 201.2983, "dec_deg": -11.1614, "mag": 0.98}
+]

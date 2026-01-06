@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sky Planetario - Osservatorio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a1a; color: #fff; }
+    .header {
+      padding: 1rem; background: #222; border-bottom: 2px solid #0088ff;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .header h1 { font-size: 1.5rem; }
+    .nav { display: flex; gap: 0.5rem; }
+    .nav a { padding: 0.5rem 1rem; background: #0088ff; color: #fff; text-decoration: none; border-radius: 4px; }
+    .nav a:hover { background: #0066cc; }
+    .container { display: flex; height: calc(100vh - 60px); }
+    .canvas-wrapper { flex: 1; background: #0a0a0a; position: relative; overflow: hidden; }
+    canvas { display: block; cursor: crosshair; }
+    .sidebar {
+      width: 300px; background: #1a1a1a; border-left: 1px solid #333; overflow-y: auto;
+      padding: 1rem; display: flex; flex-direction: column; gap: 1rem;
+    }
+    .controls {
+      background: #222; padding: 1rem; border-radius: 4px;
+    }
+    .controls label { display: block; font-size: 0.9rem; margin: 0.5rem 0; }
+    .controls input, .controls button {
+      width: 100%; padding: 0.5rem; margin: 0.5rem 0; background: #333; color: #fff; border: 1px solid #555;
+      border-radius: 4px; font-size: 0.9rem; cursor: pointer;
+    }
+    .controls input:focus, .controls button:focus { outline: none; border-color: #0088ff; }
+    .controls button:hover { background: #0088ff; color: #fff; }
+    .info {
+      background: #222; padding: 1rem; border-radius: 4px; font-size: 0.85rem;
+      max-height: 300px; overflow-y: auto;
+    }
+    .info h3 { margin-bottom: 0.5rem; color: #0088ff; }
+    .info p { margin: 0.25rem 0; }
+    .info .star-list { margin-top: 0.5rem; max-height: 500px; overflow-y: auto; }
+    .star-item {
+      padding: 0.5rem; background: #333; margin: 0.25rem 0; border-radius: 3px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .star-item:hover { background: #0088ff; }
+    .star-item small { display: block; color: #aaa; font-size: 0.75rem; }
+    .msg { padding: 0.5rem; background: #1f4788; color: #adf; border-radius: 3px; margin: 0.5rem 0; }
+    .msg.err { background: #881f1f; color: #faa; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Sky Planetario</h1>
+    <div class="nav">
+      <a href="/ui/index.html">Home</a>
+      <a href="/ui/control.html">Controllo</a>
+      <a href="/ui/align.html">Allineamento</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="canvas-wrapper">
+      <canvas id="sky" width="1200" height="600"></canvas>
+      <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 4px; font-size: 0.85rem;">
+        <div id="cursor-info">Alt/Az: -- --</div>
+        <div id="center-info" style="margin-top: 5px; font-size: 0.75rem; color: #aaa;">Center RA/Dec: --</div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="controls">
+        <h3>Controlli</h3>
+        <label>RA Deg:</label>
+        <input type="number" id="ra-input" step="0.1" value="0">
+        <label>Dec Deg:</label>
+        <input type="number" id="dec-input" step="0.1" value="0">
+        <label>Raggio (°):</label>
+        <input type="number" id="radius-input" step="5" value="60" min="5" max="180">
+        <label>Mag max:</label>
+        <input type="number" id="mag-input" step="0.5" value="5" min="0" max="10">
+        <button id="load-btn">Carica Stelle</button>
+        <button id="zenith-btn">↑ Zenit</button>
+      </div>
+
+      <div class="info">
+        <h3>Informazioni</h3>
+        <div id="status"></div>
+        <div id="msg"></div>
+        <div class="star-list" id="star-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    const canvas = document.getElementById('sky');
+    const ctx = canvas.getContext('2d');
+    const raInput = document.getElementById('ra-input');
+    const decInput = document.getElementById('dec-input');
+    const radiusInput = document.getElementById('radius-input');
+    const magInput = document.getElementById('mag-input');
+    const loadBtn = document.getElementById('load-btn');
+    const zenithBtn = document.getElementById('zenith-btn');
+    const statusDiv = document.getElementById('status');
+    const msgDiv = document.getElementById('msg');
+    const starList = document.getElementById('star-list');
+    const cursorInfo = document.getElementById('cursor-info');
+    const centerInfo = document.getElementById('center-info');
+
+    let stars = [];
+    let centerRa = 0, centerDec = 0;
+    let panX = 0, panY = 0;
+    let zoom = 1;
+    const pxPerDeg = 8; // pixel per degree
+
+    // Stereographic projection Alt/Az -> x,y
+    function altaz_to_xy(alt, az) {
+      const altR = Math.radians(alt);
+      const azR = Math.radians(az);
+      const rho = (90 - alt) * pxPerDeg * zoom;
+      const x = canvas.width / 2 + panX + rho * Math.sin(azR);
+      const y = canvas.height / 2 - panY - rho * Math.cos(azR);
+      return { x, y };
+    }
+
+    function xy_to_altaz(x, y) {
+      const px = x - canvas.width / 2 - panX;
+      const py = canvas.height / 2 + panY - y;
+      const rho = Math.sqrt(px * px + py * py) / (pxPerDeg * zoom);
+      const alt = 90 - rho;
+      let az = Math.atan2(px, py) * 180 / Math.PI;
+      if (az < 0) az += 360;
+      return { alt, az };
+    }
+
+    async function loadStars() {
+      msgDiv.innerHTML = '';
+      const ra = parseFloat(raInput.value);
+      const dec = parseFloat(decInput.value);
+      const radius = parseFloat(radiusInput.value);
+      const maxmag = parseFloat(magInput.value);
+      centerRa = ra;
+      centerDec = dec;
+      centerInfo.textContent = `Center RA/Dec: ${ra.toFixed(1)}° ${dec.toFixed(1)}°`;
+      try {
+        const resp = await fetch(`${API_BASE}/sky/stars?ra_deg=${ra}&dec_deg=${dec}&radius=${radius}&maxmag=${maxmag}`);
+        const data = await resp.json();
+        if (data.ok) {
+          stars = data.stars;
+          statusDiv.innerHTML = `<strong>Stelle caricate:</strong> ${stars.length}`;
+          renderStarList();
+          draw();
+        } else {
+          msgDiv.innerHTML = `<div class="msg err">Errore: ${data}</div>`;
+        }
+      } catch (e) {
+        msgDiv.innerHTML = `<div class="msg err">Errore: ${e.message}</div>`;
+      }
+    }
+
+    async function loadZenith() {
+      msgDiv.innerHTML = '';
+      raInput.value = '0';
+      decInput.value = '0';
+      try {
+        const resp = await fetch(`${API_BASE}/sky/stars?radius=${radiusInput.value}&maxmag=${magInput.value}`);
+        const data = await resp.json();
+        if (data.ok) {
+          centerRa = data.center_ra;
+          centerDec = data.center_dec;
+          raInput.value = centerRa.toFixed(1);
+          decInput.value = centerDec.toFixed(1);
+          stars = data.stars;
+          statusDiv.innerHTML = `<strong>Stelle al zenit:</strong> ${stars.length}`;
+          centerInfo.textContent = `Center RA/Dec: ${centerRa.toFixed(1)}° ${centerDec.toFixed(1)}°`;
+          renderStarList();
+          draw();
+        } else {
+          msgDiv.innerHTML = `<div class="msg err">Errore: ${data}</div>`;
+        }
+      } catch (e) {
+        msgDiv.innerHTML = `<div class="msg err">Errore: ${e.message}</div>`;
+      }
+    }
+
+    function renderStarList() {
+      starList.innerHTML = '';
+      const sorted = stars.slice().sort((a, b) => a.mag - b.mag);
+      sorted.slice(0, 20).forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'star-item';
+        item.innerHTML = `<strong>${s.name || `RA ${s.ra_deg.toFixed(1)}°`}</strong>
+          <small>Alt ${s.alt_deg.toFixed(1)}° Az ${s.az_deg.toFixed(1)}° Mag ${s.mag.toFixed(1)}</small>`;
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', () => gotoStar(s));
+        starList.appendChild(item);
+      });
+    }
+
+    function draw() {
+      // Black background
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw horizon circle
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(canvas.width / 2 + panX, canvas.height / 2 - panY, 90 * pxPerDeg * zoom, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Draw Alt grid (every 15°)
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1;
+      for (let alt = 15; alt < 90; alt += 15) {
+        const rho = (90 - alt) * pxPerDeg * zoom;
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2 + panX, canvas.height / 2 - panY, rho, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Draw Az grid (every 30°) and cardinal directions
+      ctx.strokeStyle = '#222';
+      ctx.fillStyle = '#666';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      const cardinals = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' };
+      for (let az = 0; az < 360; az += 30) {
+        const azR = Math.radians(az);
+        const x1 = canvas.width / 2 + panX + 90 * pxPerDeg * zoom * Math.sin(azR);
+        const y1 = canvas.height / 2 - panY - 90 * pxPerDeg * zoom * Math.cos(azR);
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2 + panX, canvas.height / 2 - panY);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+        if (cardinals[az]) {
+          const label_rho = 100 * pxPerDeg * zoom;
+          const lx = canvas.width / 2 + panX + label_rho * Math.sin(azR);
+          const ly = canvas.height / 2 - panY - label_rho * Math.cos(azR);
+          ctx.fillText(cardinals[az], lx, ly);
+        }
+      }
+
+      // Draw stars
+      stars.forEach(s => {
+        const pos = altaz_to_xy(s.alt_deg, s.az_deg);
+        const mag = s.mag;
+        const size = Math.max(2, 5 - mag);
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+        ctx.fill();
+        if (mag < 3) {
+          ctx.strokeStyle = '#ffff00';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, size + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      });
+    }
+
+    function gotoStar(star) {
+      const goto_alt = Math.round(star.alt_deg * 100) / 100;
+      const goto_az = Math.round(star.az_deg * 100) / 100;
+      msgDiv.innerHTML = `<div class="msg">GOTO ${star.name}: Alt ${goto_alt}° Az ${goto_az}°...</div>`;
+      fetch(`${API_BASE}/goto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alt_deg: goto_alt, az_deg: goto_az })
+      }).then(r => r.json()).then(d => {
+        if (d.ok) {
+          msgDiv.innerHTML = `<div class="msg">GOTO completato: ${d.ra_deg.toFixed(4)}° ${d.dec_deg.toFixed(4)}°</div>`;
+        } else {
+          msgDiv.innerHTML = `<div class="msg err">Errore GOTO: ${d}</div>`;
+        }
+      }).catch(e => {
+        msgDiv.innerHTML = `<div class="msg err">Errore: ${e.message}</div>`;
+      });
+    }
+
+    // Canvas events
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const altaz = xy_to_altaz(x, y);
+      cursorInfo.textContent = `Alt/Az: ${altaz.alt.toFixed(1)}° ${altaz.az.toFixed(1)}°`;
+    });
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const altaz = xy_to_altaz(x, y);
+      const nearest = stars.reduce((best, s) => {
+        const pos = altaz_to_xy(s.alt_deg, s.az_deg);
+        const d = Math.sqrt((pos.x - x) ** 2 + (pos.y - y) ** 2);
+        return d < 20 && (!best || d < best.dist) ? { star: s, dist: d } : best;
+      }, null);
+      if (nearest) {
+        gotoStar(nearest.star);
+      } else {
+        msgDiv.innerHTML = `<div class="msg">GOTO Alt ${altaz.alt.toFixed(1)}° Az ${altaz.az.toFixed(1)}°...</div>`;
+        fetch(`${API_BASE}/goto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alt_deg: altaz.alt, az_deg: altaz.az })
+        }).then(r => r.json()).then(d => {
+          if (d.ok) {
+            msgDiv.innerHTML = `<div class="msg">GOTO completato</div>`;
+          } else {
+            msgDiv.innerHTML = `<div class="msg err">Errore: ${d}</div>`;
+          }
+        }).catch(e => {
+          msgDiv.innerHTML = `<div class="msg err">Errore: ${e.message}</div>`;
+        });
+      }
+    });
+
+    // Scroll zoom
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      zoom *= factor;
+      draw();
+    });
+
+    // Buttons
+    loadBtn.addEventListener('click', loadStars);
+    zenithBtn.addEventListener('click', loadZenith);
+
+    // Init
+    window.addEventListener('load', loadZenith);
+
+    // Polyfill for Math.radians
+    if (!Math.radians) {
+      Math.radians = (d) => d * Math.PI / 180;
+    }
+  </script>
+</body>
+</html>

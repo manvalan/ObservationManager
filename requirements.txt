@@ -1,0 +1,6 @@
+pyserial>=3.5
+fastapi>=0.115
+uvicorn[standard]>=0.30
+skyfield>=1.49
+numpy>=1.25
+opencv-python>=4.8

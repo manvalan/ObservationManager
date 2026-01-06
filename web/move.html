@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Movimento Manuale</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+    fieldset { margin-bottom: 1rem; }
+    button { margin: .3rem; padding: .5rem 1rem; }
+    .grid { display: inline-grid; grid-template-columns: auto auto auto; gap: .5rem; }
+    .status { padding: .5rem; background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Movimento Manuale</h1>
+  <p><a href="index.html">Home</a> · <a href="control.html">Controllo</a></p>
+
+  <fieldset>
+    <legend>Parametri</legend>
+    <label>Velocità</label>
+    <select id="rate">
+      <option>slew</option>
+      <option>find</option>
+      <option>center</option>
+      <option>guide</option>
+    </select>
+    <label>Secondi</label>
+    <input id="seconds" type="number" step="0.1" value="0" />
+  </fieldset>
+
+  <fieldset>
+    <legend>Direzioni</legend>
+    <div class="grid">
+      <div></div>
+      <button data-dir="N">Nord</button>
+      <div></div>
+      <button data-dir="W">Ovest</button>
+      <button id="stopAll">Stop</button>
+      <button data-dir="E">Est</button>
+      <div></div>
+      <button data-dir="S">Sud</button>
+      <div></div>
+    </div>
+  </fieldset>
+
+  <div class="status" id="moveRes"></div>
+
+  <script>
+    async function api(path, options) {
+      const res = await fetch(path, options);
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      return res.json();
+    }
+
+    async function doMove(dir) {
+      try {
+        const rate = document.getElementById('rate').value;
+        const seconds = parseFloat(document.getElementById('seconds').value || '0');
+        const body = { dir, rate, seconds };
+        const j = await api('/api/move', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        document.getElementById('moveRes').textContent = JSON.stringify(j);
+      } catch (e) { alert(e.message); }
+    }
+
+    document.querySelectorAll('button[data-dir]').forEach(btn => {
+      btn.addEventListener('click', () => doMove(btn.getAttribute('data-dir')));
+    });
+
+    document.getElementById('stopAll').onclick = async () => {
+      try {
+        const j = await api('/api/stop', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+        document.getElementById('moveRes').textContent = JSON.stringify(j);
+      } catch (e) { alert(e.message); }
+    };
+  </script>
+</body>
+</html>

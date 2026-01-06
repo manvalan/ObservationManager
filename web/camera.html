@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Camera Live</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 1rem; }
+    #view { max-width: 100%; border: 1px solid #ddd; }
+    .controls { margin: .5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Camera Live</h1>
+  <p><a href="index.html">Home</a></p>
+
+  <div class="controls">
+    <label>Camera index</label>
+    <input id="camIndex" type="number" value="0" style="width: 60px" />
+    <button id="start">Start</button>
+  </div>
+
+  <img id="view" />
+
+  <script>
+    document.getElementById('start').onclick = () => {
+      const idx = parseInt(document.getElementById('camIndex').value||'0', 10);
+      const img = document.getElementById('view');
+      img.src = '/api/video.mjpg?camera_index=' + idx + '&_t=' + Date.now();
+    };
+  </script>
+</body>
+</html>
