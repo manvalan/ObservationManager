@@ -35,6 +35,8 @@ try:
 except ImportError:
     HAS_WATEC = False
 
+from server.live_stacker import LiveStacker
+
 logger = logging.getLogger(__name__)
 
 
@@ -92,6 +94,9 @@ class CameraController:
         self.sequence_thread: Optional[threading.Thread] = None
         self.sequence_params: Dict[str, Any] = {}
         self.captured_sequence_count = 0
+
+        # Live stacking helper
+        self.live_stacker = LiveStacker(self.get_frame, save_fits_callable=self.save_fits)
         
     def list_devices(self, max_check: int = 10) -> List[Dict[str, Any]]:
         """
@@ -359,7 +364,9 @@ class CameraController:
         self,
         frame: np.ndarray,
         filename: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        output_dir: str = "data/images",
+        wcs_info: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Salva frame come FITS con metadata.
@@ -368,6 +375,8 @@ class CameraController:
             frame: Frame numpy array
             filename: Nome file (senza path, verrà salvato in data/)
             metadata: Dict con metadata aggiuntivi (target, ra, dec, telescope, etc)
+            output_dir: Directory di output (default data/images)
+            wcs_info: Dict opzionale con RA/DEC centro, pixel_scale_arcsec, rotation_deg
             
         Returns:
             Path completo file salvato
@@ -376,7 +385,7 @@ class CameraController:
             raise RuntimeError("Astropy non installato. pip install astropy")
         
         # Prepara directory
-        save_dir = Path("data/images")
+        save_dir = Path(output_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
         
         # Nome file con timestamp se non specificato
@@ -412,12 +421,32 @@ class CameraController:
         if metadata:
             for key, value in metadata.items():
                 if key.upper() not in hdu.header:
-                    # FITS keywords max 8 chars
                     fits_key = key.upper()[:8]
                     try:
                         hdu.header[fits_key] = (value, key)
-                    except:
-                        pass  # Skip se valore non valido
+                    except Exception as exc:
+                        logger.debug(f"Skip metadata {key}: {exc}")
+
+        if wcs_info:
+            try:
+                ra = float(wcs_info.get("ra_deg")) if wcs_info.get("ra_deg") is not None else None
+                dec = float(wcs_info.get("dec_deg")) if wcs_info.get("dec_deg") is not None else None
+                pixel_scale = float(wcs_info.get("pixel_scale_arcsec", 0))
+                rotation = float(wcs_info.get("rotation_deg", 0))
+                if ra is not None and dec is not None and pixel_scale > 0:
+                    height, width = gray.shape[:2]
+                    crpix1 = width / 2.0
+                    crpix2 = height / 2.0
+                    cdelt = pixel_scale / 3600.0
+                    hdu.header['CRVAL1'] = ra
+                    hdu.header['CRVAL2'] = dec
+                    hdu.header['CRPIX1'] = crpix1
+                    hdu.header['CRPIX2'] = crpix2
+                    hdu.header['CDELT1'] = -cdelt
+                    hdu.header['CDELT2'] = cdelt
+                    hdu.header['CROTA2'] = rotation
+            except Exception as exc:
+                logger.debug(f"Skip WCS metadata: {exc}")
         
         # Salva
         hdu.writeto(str(filepath), overwrite=True)
@@ -807,6 +836,39 @@ class CameraController:
             "progress": (captured / total * 100) if total > 0 else 0,
             "output_dir": self.sequence_params.get("output_dir", "")
         }
+
+    # ========== Live Stacking ==========
+
+    def start_live_stack(self, interval: float = 0.5, max_frames: int = 0, normalize: bool = True) -> Dict[str, Any]:
+        """Avvia live stacking in background (polling get_frame)."""
+        if not self.is_capturing:
+            self.start_capture()
+        return self.live_stacker.start(interval=interval, max_frames=max_frames, normalize=normalize)
+
+    def stop_live_stack(self) -> Dict[str, Any]:
+        """Ferma live stacking e ritorna stato finale."""
+        return self.live_stacker.stop()
+
+    def get_live_stack_status(self) -> Dict[str, Any]:
+        """Ritorna stato live stacking."""
+        return self.live_stacker.get_status()
+
+    def save_live_stack(
+        self,
+        filename: Optional[str] = None,
+        fmt: str = "fits",
+        metadata: Optional[Dict[str, Any]] = None,
+        wcs_info: Optional[Dict[str, Any]] = None,
+        output_dir: str = "data/stacking"
+    ) -> str:
+        """Salva stack corrente come FITS/PNG."""
+        return self.live_stacker.save_stack(
+            filename=filename,
+            fmt=fmt,
+            metadata=metadata,
+            wcs_info=wcs_info,
+            output_dir=output_dir,
+        )
     
     def __del__(self):
         """Cleanup on delete."""

@@ -56,11 +56,11 @@
 - [x] Contributing guide con development workflow
 - [x] Roadmap completa per Phase 2-4
 
-## Milestone 8 – Advanced Imaging
-- [ ] Filter wheel support (seriale/USB)
-- [ ] Live stacking con alignment automatico
-- [ ] Calibration automation (dark, flat, bias)
-- [ ] FITS metadata + WCS projection
+## Milestone 8 – Advanced Imaging ✓ COMPLETATO
+- [x] Filter wheel support (seriale/USB)
+- [x] Live stacking con alignment automatico
+- [x] Calibration automation (dark, flat, bias)
+- [x] FITS metadata + WCS projection
 
 ## Milestone 9 – Analytics Dashboard ✓ COMPLETATO
 - [x] Analytics Dashboard UI (web/analytics.html con Charts.js)

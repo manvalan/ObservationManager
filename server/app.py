@@ -17,6 +17,8 @@ from lx200.catalog import resolve_name
 from lx200.catalog import resolve_id_via_gaia
 from server.camera import camera_controller
 from server.session_manager import SessionManager
+from server.filter_wheel import SerialFilterWheel, MockFilterWheel, filter_wheel_manager
+from server.calibration import calibration_manager
 from server.sequence import (
     ObservingSequence, SequenceStep, StepType, StepStatus,
     SequenceExecutor, get_executor, register_executor, unregister_executor
@@ -860,6 +862,9 @@ class SaveFitsBody(BaseModel):
     dec: Optional[float] = Field(None, description="Dec gradi")
     telescope: Optional[str] = Field(None, description="Nome telescopio")
     observer: Optional[str] = Field(None, description="Nome osservatore")
+    pixel_scale_arcsec: Optional[float] = Field(None, description="Arcsec/pixel per WCS")
+    rotation_deg: Optional[float] = Field(None, description="Rotazione immagine (deg)")
+    output_dir: str = Field("data/images", description="Directory output")
 
 
 @app.post("/api/camera/save-fits")
@@ -889,7 +894,22 @@ def api_camera_save_fits(body: SaveFitsBody):
             metadata['SITEELEV'] = site_settings["elevation"]
         
         # Salva FITS
-        filepath = camera_controller.save_fits(frame, body.filename or "", metadata)
+        wcs_info = None
+        if body.pixel_scale_arcsec and body.ra is not None and body.dec is not None:
+            wcs_info = {
+                "ra_deg": body.ra,
+                "dec_deg": body.dec,
+                "pixel_scale_arcsec": body.pixel_scale_arcsec,
+                "rotation_deg": body.rotation_deg or 0.0,
+            }
+
+        filepath = camera_controller.save_fits(
+            frame,
+            body.filename or "",
+            metadata,
+            output_dir=body.output_dir,
+            wcs_info=wcs_info,
+        )
         
         # Calcola statistiche
         stats = camera_controller.compute_statistics(frame)
@@ -921,6 +941,33 @@ class StartSequenceBody(BaseModel):
     target: Optional[str] = Field(None, description="Nome target per metadata FITS")
     ra: Optional[float] = Field(None, description="RA target (gradi)")
     dec: Optional[float] = Field(None, description="Dec target (gradi)")
+
+
+class LiveStackStartBody(BaseModel):
+    interval: float = Field(0.5, description="Intervallo polling frame (s)")
+    max_frames: Optional[int] = Field(None, description="Stop automatico dopo N frame (0=illimitato)")
+    normalize: bool = Field(True, description="Normalizza preview 0-255")
+
+
+class LiveStackSaveBody(BaseModel):
+    filename: Optional[str] = Field(None, description="Nome file senza estensione")
+    fmt: str = Field("fits", description="Formato fits o png")
+    target: Optional[str] = Field(None, description="Nome target")
+    ra: Optional[float] = Field(None, description="RA centro (deg)")
+    dec: Optional[float] = Field(None, description="Dec centro (deg)")
+    pixel_scale_arcsec: Optional[float] = Field(None, description="Arcsec/pixel per WCS")
+    rotation_deg: Optional[float] = Field(None, description="Rotazione immagine (deg)")
+    output_dir: str = Field("data/stacking", description="Directory output")
+
+
+class CalibrationStartBody(BaseModel):
+    calib_type: str = Field(..., description="Tipo calibrazione: dark, flat, bias")
+    count: int = Field(10, description="Numero frame")
+    interval: float = Field(0.0, description="Intervallo tra frame (s)")
+    exposure: Optional[float] = Field(None, description="Esposizione ms (override)")
+    gain: Optional[int] = Field(None, description="Gain (override)")
+    output_dir: str = Field("data/calibration", description="Directory base")
+    metadata: Optional[dict] = Field(None, description="Metadata aggiuntivi per FITS")
 
 
 @app.post("/api/camera/recording/start")
@@ -1003,6 +1050,103 @@ def api_camera_sequence_status():
     """Ritorna stato sequenza corrente."""
     try:
         return camera_controller.get_sequence_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------- Live Stacking API --------
+
+@app.post("/api/camera/live-stack/start")
+def api_live_stack_start(body: LiveStackStartBody):
+    try:
+        status = camera_controller.start_live_stack(
+            interval=body.interval,
+            max_frames=body.max_frames or 0,
+            normalize=body.normalize,
+        )
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/camera/live-stack/stop")
+def api_live_stack_stop():
+    try:
+        return camera_controller.stop_live_stack()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/camera/live-stack/status")
+def api_live_stack_status():
+    try:
+        return camera_controller.get_live_stack_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/live-stack/save")
+def api_live_stack_save(body: LiveStackSaveBody):
+    try:
+        metadata = {}
+        if body.target:
+            metadata['OBJECT'] = body.target
+        if site_settings.get("latitude"):
+            metadata['SITELAT'] = site_settings["latitude"]
+            metadata['SITELONG'] = site_settings["longitude"]
+            metadata['SITEELEV'] = site_settings["elevation"]
+
+        wcs_info = None
+        if body.pixel_scale_arcsec and body.ra is not None and body.dec is not None:
+            wcs_info = {
+                "ra_deg": body.ra,
+                "dec_deg": body.dec,
+                "pixel_scale_arcsec": body.pixel_scale_arcsec,
+                "rotation_deg": body.rotation_deg or 0.0,
+            }
+
+        filepath = camera_controller.save_live_stack(
+            filename=body.filename,
+            fmt=body.fmt,
+            metadata=metadata,
+            wcs_info=wcs_info,
+            output_dir=body.output_dir,
+        )
+        return {"status": "saved", "filepath": filepath}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# -------- Calibration Automation API --------
+
+@app.post("/api/calibration/start")
+def api_calibration_start(body: CalibrationStartBody):
+    try:
+        return calibration_manager.start(
+            calib_type=body.calib_type,
+            count=body.count,
+            interval=body.interval,
+            exposure=body.exposure,
+            gain=body.gain,
+            output_dir=body.output_dir,
+            metadata=body.metadata,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/calibration/stop")
+def api_calibration_stop():
+    try:
+        return calibration_manager.stop()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/calibration/status")
+def api_calibration_status():
+    try:
+        return calibration_manager.get_status()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2172,4 +2316,113 @@ class _SessionStatsHelper:
 
 # Monkey patch SessionManager with helper
 SessionManager.get_all_sessions_with_stats = _SessionStatsHelper.get_all_sessions_with_stats
+
+
+# ============================================================================
+# Filter Wheel Endpoints (M8.1)
+# ============================================================================
+
+@app.post("/api/filter-wheel/init")
+def api_filter_wheel_init(port: Optional[str] = None, name: str = "main"):
+    """Initialize filter wheel connection.
+    
+    Args:
+        port: Serial port (e.g., '/dev/ttyUSB0', 'COM3')
+              If None, uses mock driver for testing
+        name: Wheel identifier
+    """
+    try:
+        if port is None:
+            # Mock mode for testing
+            wheel = MockFilterWheel()
+        else:
+            # Real hardware
+            wheel = SerialFilterWheel(port=port)
+        
+        filter_wheel_manager._wheels[name] = wheel
+        if filter_wheel_manager._default_wheel is None:
+            filter_wheel_manager._default_wheel = name
+        
+        if wheel.connect():
+            return {"ok": True, "wheel": name, "connected": True}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to connect to filter wheel")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/filter-wheel/status")
+def api_filter_wheel_status(name: Optional[str] = None):
+    """Get filter wheel status."""
+    wheel = filter_wheel_manager.get_wheel(name)
+    if not wheel:
+        raise HTTPException(status_code=404, detail="Filter wheel not found")
+    
+    status = wheel.get_status()
+    return {"ok": True, "status": status}
+
+
+@app.post("/api/filter-wheel/select/{position}")
+def api_filter_wheel_select(position: int, name: Optional[str] = None):
+    """Select filter by position."""
+    wheel = filter_wheel_manager.get_wheel(name)
+    if not wheel:
+        raise HTTPException(status_code=404, detail="Filter wheel not found")
+    
+    if not wheel.is_connected():
+        raise HTTPException(status_code=503, detail="Filter wheel not connected")
+    
+    if wheel.select_filter(position):
+        return {"ok": True, "position": position, "filter": wheel.get_filter_name(position)}
+    else:
+        raise HTTPException(status_code=400, detail="Failed to select filter")
+
+
+@app.get("/api/filter-wheel/filters")
+def api_filter_wheel_filters(name: Optional[str] = None):
+    """Get available filters."""
+    wheel = filter_wheel_manager.get_wheel(name)
+    if not wheel:
+        raise HTTPException(status_code=404, detail="Filter wheel not found")
+    
+    return {
+        "ok": True,
+        "filters": wheel.get_filters(),
+        "count": wheel.get_filter_count()
+    }
+
+
+@app.post("/api/filter-wheel/wait/{position}")
+def api_filter_wheel_wait(position: int, timeout: float = 10.0, name: Optional[str] = None):
+    """Wait for filter wheel to reach position."""
+    wheel = filter_wheel_manager.get_wheel(name)
+    if not wheel:
+        raise HTTPException(status_code=404, detail="Filter wheel not found")
+    
+    if wheel.wait_for_position(position, timeout):
+        return {"ok": True, "reached": True, "position": position}
+    else:
+        return {"ok": False, "reached": False, "message": "Timeout waiting for position"}
+
+
+@app.get("/api/filter-wheel/statistics")
+def api_filter_wheel_statistics(name: Optional[str] = None):
+    """Get filter wheel operation statistics."""
+    wheel = filter_wheel_manager.get_wheel(name)
+    if not wheel:
+        raise HTTPException(status_code=404, detail="Filter wheel not found")
+    
+    stats = wheel.get_statistics()
+    return {"ok": True, "statistics": stats}
+
+
+@app.post("/api/filter-wheel/disconnect")
+def api_filter_wheel_disconnect(name: Optional[str] = None):
+    """Disconnect filter wheel."""
+    wheel = filter_wheel_manager.get_wheel(name)
+    if not wheel:
+        raise HTTPException(status_code=404, detail="Filter wheel not found")
+    
+    wheel.disconnect()
+    return {"ok": True, "disconnected": True}
 
