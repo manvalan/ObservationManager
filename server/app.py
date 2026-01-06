@@ -724,6 +724,17 @@ class CameraSettingsBody(BaseModel):
     width: Optional[int] = Field(None, description="Larghezza frame")
     height: Optional[int] = Field(None, description="Altezza frame")
     fps: Optional[float] = Field(None, description="Frame rate")
+    brightness: Optional[int] = Field(None, description="Luminosità 0-100 (-1=auto)")
+    contrast: Optional[int] = Field(None, description="Contrasto 0-100 (-1=auto)")
+    saturation: Optional[int] = Field(None, description="Saturazione 0-100 (-1=auto)")
+    hue: Optional[int] = Field(None, description="Tonalità -180 to 180 (-1=auto)")
+    sharpness: Optional[int] = Field(None, description="Nitidezza 0-100 (-1=auto)")
+    gamma: Optional[int] = Field(None, description="Gamma 0-300 (-1=auto)")
+    white_balance: Optional[int] = Field(None, description="Bilanciamento bianco 2000-7500K (-1=auto)")
+    backlight: Optional[int] = Field(None, description="Compensazione controluce 0-1 (-1=auto)")
+    focus: Optional[int] = Field(None, description="Fuoco 0-255 (-1=auto)")
+    zoom: Optional[int] = Field(None, description="Zoom digitale 100-500 (-1=auto)")
+    iso: Optional[int] = Field(None, description="Sensibilità ISO 100-6400 (-1=auto)")
 
 
 @app.get("/api/camera/settings")

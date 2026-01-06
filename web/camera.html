@@ -265,34 +265,89 @@
       <div class="panel">
         <h2>⚙️ Impostazioni</h2>
         
-        <div class="control-group">
-          <label>Esposizione (ms) <span id="expValue">Auto</span></label>
-          <input type="range" id="exposure" min="-1" max="100" value="-1" />
-        </div>
+        <!-- Basic Settings -->
+        <details open>
+          <summary style="cursor: pointer; margin-bottom: 0.75rem; font-weight: 600; color: #4fc3f7;">Impostazioni Base</summary>
+          
+          <div class="control-group">
+            <label>Esposizione (ms) <span id="expValue">Auto</span></label>
+            <input type="range" id="exposure" min="-1" max="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Gain <span id="gainValue">Auto</span></label>
+            <input type="range" id="gain" min="-1" max="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Binning</label>
+            <select id="binning">
+              <option value="1">1x1 (No binning)</option>
+              <option value="2">2x2</option>
+              <option value="4">4x4</option>
+            </select>
+          </div>
+          
+          <div class="control-group">
+            <label>Risoluzione</label>
+            <select id="resolution">
+              <option value="640x480">640 x 480</option>
+              <option value="800x600">800 x 600</option>
+              <option value="1280x720">1280 x 720 (HD)</option>
+              <option value="1920x1080">1920 x 1080 (Full HD)</option>
+            </select>
+          </div>
+        </details>
         
-        <div class="control-group">
-          <label>Gain <span id="gainValue">Auto</span></label>
-          <input type="range" id="gain" min="-1" max="100" value="-1" />
-        </div>
-        
-        <div class="control-group">
-          <label>Binning</label>
-          <select id="binning">
-            <option value="1">1x1 (No binning)</option>
-            <option value="2">2x2</option>
-            <option value="4">4x4</option>
-          </select>
-        </div>
-        
-        <div class="control-group">
-          <label>Risoluzione</label>
-          <select id="resolution">
-            <option value="640x480">640 x 480</option>
-            <option value="800x600">800 x 600</option>
-            <option value="1280x720">1280 x 720 (HD)</option>
-            <option value="1920x1080">1920 x 1080 (Full HD)</option>
-          </select>
-        </div>
+        <!-- Advanced Settings -->
+        <details style="margin-top: 1rem;">
+          <summary style="cursor: pointer; margin-bottom: 0.75rem; font-weight: 600; color: #81c784;">Controlli Avanzati</summary>
+          
+          <div class="control-group">
+            <label>Luminosità <span id="brightnessValue">Auto</span></label>
+            <input type="range" id="brightness" min="-1" max="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Contrasto <span id="contrastValue">Auto</span></label>
+            <input type="range" id="contrast" min="-1" max="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Saturazione <span id="saturationValue">Auto</span></label>
+            <input type="range" id="saturation" min="-1" max="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Nitidezza <span id="sharpnessValue">Auto</span></label>
+            <input type="range" id="sharpness" min="-1" max="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Gamma <span id="gammaValue">Auto</span></label>
+            <input type="range" id="gamma" min="-1" max="300" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>White Balance (K) <span id="wbValue">Auto</span></label>
+            <input type="range" id="white_balance" min="-1" max="7500" step="100" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Focus <span id="focusValue">Auto</span></label>
+            <input type="range" id="focus" min="-1" max="255" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>Zoom (%) <span id="zoomValue">100</span></label>
+            <input type="range" id="zoom" min="-1" max="500" value="-1" />
+          </div>
+          
+          <div class="control-group">
+            <label>ISO <span id="isoValue">Auto</span></label>
+            <input type="range" id="iso" min="-1" max="6400" step="100" value="-1" />
+          </div>
+        </details>
         
         <button id="btnApplySettings" class="secondary">Applica Settings</button>
       </div>
@@ -460,10 +515,40 @@
       
       document.getElementById('expValue').textContent = exp < 0 ? 'Auto' : `${exp} ms`;
       document.getElementById('gainValue').textContent = gain < 0 ? 'Auto' : gain;
+      
+      // Advanced controls
+      const brightness = parseInt(document.getElementById('brightness').value);
+      const contrast = parseInt(document.getElementById('contrast').value);
+      const saturation = parseInt(document.getElementById('saturation').value);
+      const sharpness = parseInt(document.getElementById('sharpness').value);
+      const gamma = parseInt(document.getElementById('gamma').value);
+      const wb = parseInt(document.getElementById('white_balance').value);
+      const focus = parseInt(document.getElementById('focus').value);
+      const zoom = parseInt(document.getElementById('zoom').value);
+      const iso = parseInt(document.getElementById('iso').value);
+      
+      document.getElementById('brightnessValue').textContent = brightness < 0 ? 'Auto' : brightness;
+      document.getElementById('contrastValue').textContent = contrast < 0 ? 'Auto' : contrast;
+      document.getElementById('saturationValue').textContent = saturation < 0 ? 'Auto' : saturation;
+      document.getElementById('sharpnessValue').textContent = sharpness < 0 ? 'Auto' : sharpness;
+      document.getElementById('gammaValue').textContent = gamma < 0 ? 'Auto' : gamma;
+      document.getElementById('wbValue').textContent = wb < 0 ? 'Auto' : `${wb}K`;
+      document.getElementById('focusValue').textContent = focus < 0 ? 'Auto' : focus;
+      document.getElementById('zoomValue').textContent = zoom < 0 ? '100%' : `${zoom}%`;
+      document.getElementById('isoValue').textContent = iso < 0 ? 'Auto' : iso;
     }
     
     document.getElementById('exposure').oninput = updateSettingsDisplay;
     document.getElementById('gain').oninput = updateSettingsDisplay;
+      document.getElementById('brightness').oninput = updateSettingsDisplay;
+      document.getElementById('contrast').oninput = updateSettingsDisplay;
+      document.getElementById('saturation').oninput = updateSettingsDisplay;
+      document.getElementById('sharpness').oninput = updateSettingsDisplay;
+      document.getElementById('gamma').oninput = updateSettingsDisplay;
+      document.getElementById('white_balance').oninput = updateSettingsDisplay;
+      document.getElementById('focus').oninput = updateSettingsDisplay;
+      document.getElementById('zoom').oninput = updateSettingsDisplay;
+      document.getElementById('iso').oninput = updateSettingsDisplay;
     
     async function applySettings() {
       if (!isDeviceOpen) {
@@ -471,17 +556,31 @@
         return;
       }
       
-      const exposure = parseInt(document.getElementById('exposure').value);
-      const gain = parseInt(document.getElementById('gain').value);
-      const binning = parseInt(document.getElementById('binning').value);
+      const settings = {
+        exposure: parseInt(document.getElementById('exposure').value),
+        gain: parseInt(document.getElementById('gain').value),
+        binning: parseInt(document.getElementById('binning').value),
+        brightness: parseInt(document.getElementById('brightness').value),
+        contrast: parseInt(document.getElementById('contrast').value),
+        saturation: parseInt(document.getElementById('saturation').value),
+        sharpness: parseInt(document.getElementById('sharpness').value),
+        gamma: parseInt(document.getElementById('gamma').value),
+        white_balance: parseInt(document.getElementById('white_balance').value),
+        focus: parseInt(document.getElementById('focus').value),
+        zoom: parseInt(document.getElementById('zoom').value),
+        iso: parseInt(document.getElementById('iso').value),
+      };
+      
       const [width, height] = document.getElementById('resolution').value.split('x').map(Number);
+      settings.width = width;
+      settings.height = height;
       
       try {
         log('Applicazione settings...');
         const resp = await fetch('/api/camera/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ exposure, gain, binning, width, height })
+          body: JSON.stringify(settings)
         });
         const data = await resp.json();
         
