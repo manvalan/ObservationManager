@@ -79,6 +79,20 @@ class CameraController:
         # Statistics cache
         self.stats_cache: Dict[str, Any] = {}
         
+        # Video recording
+        self.is_recording = False
+        self.video_writer: Optional[cv2.VideoWriter] = None
+        self.recording_thread: Optional[threading.Thread] = None
+        self.recording_path: Optional[str] = None
+        self.recording_start_time: Optional[float] = None
+        self.recorded_frames = 0
+        
+        # Image sequence capture
+        self.is_sequencing = False
+        self.sequence_thread: Optional[threading.Thread] = None
+        self.sequence_params: Dict[str, Any] = {}
+        self.captured_sequence_count = 0
+        
     def list_devices(self, max_check: int = 10) -> List[Dict[str, Any]]:
         """
         Scansiona dispositivi video disponibili.
@@ -454,8 +468,362 @@ class CameraController:
         
         return 0.0
     
+    # ========== Video Recording ==========
+    
+    def start_recording(
+        self,
+        filename: Optional[str] = None,
+        codec: str = "mp4v",
+        output_dir: str = "data/recordings"
+    ) -> Dict[str, Any]:
+        """
+        Avvia registrazione video.
+        
+        Args:
+            filename: Nome file (senza estensione). Se None, usa timestamp.
+            codec: Codec video ('mp4v', 'XVID', 'MJPEG', 'H264')
+            output_dir: Directory output
+        
+        Returns:
+            Info registrazione (filepath, fps, resolution)
+        """
+        if self.is_recording:
+            raise RuntimeError("Registrazione già in corso")
+        
+        if self.device is None:
+            raise RuntimeError("Device non aperto")
+        
+        # Assicura che capture sia attiva
+        if not self.is_capturing:
+            self.start_capture()
+        
+        # Crea directory
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Nome file
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"video_{timestamp}"
+        
+        # Estensione basata su codec
+        ext = ".mp4" if codec in ["mp4v", "H264", "avc1"] else ".avi"
+        filepath = output_path / f"{filename}{ext}"
+        
+        # Configurazione video writer
+        fourcc = cv2.VideoWriter_fourcc(*codec)
+        fps = self.settings["fps"]
+        frame_size = (self.settings["width"], self.settings["height"])
+        
+        self.video_writer = cv2.VideoWriter(
+            str(filepath),
+            fourcc,
+            fps,
+            frame_size
+        )
+        
+        if not self.video_writer.isOpened():
+            raise RuntimeError(f"Impossibile aprire video writer con codec {codec}")
+        
+        # Stato
+        self.is_recording = True
+        self.recording_path = str(filepath)
+        self.recording_start_time = time.time()
+        self.recorded_frames = 0
+        
+        # Thread recording
+        self.recording_thread = threading.Thread(target=self._recording_loop, daemon=True)
+        self.recording_thread.start()
+        
+        logger.info(f"Registrazione avviata: {filepath} ({fps} fps, {frame_size})")
+        
+        return {
+            "status": "recording",
+            "filepath": str(filepath),
+            "filename": filepath.name,
+            "fps": fps,
+            "resolution": f"{frame_size[0]}x{frame_size[1]}",
+            "codec": codec
+        }
+    
+    def _recording_loop(self):
+        """Loop registrazione video (esegue in thread separato)."""
+        while self.is_recording and self.video_writer is not None:
+            frame = self.get_frame()
+            
+            if frame is not None:
+                # Assicura dimensioni corrette
+                h, w = frame.shape[:2]
+                target_w, target_h = self.settings["width"], self.settings["height"]
+                
+                if (w, h) != (target_w, target_h):
+                    frame = cv2.resize(frame, (target_w, target_h))
+                
+                self.video_writer.write(frame)
+                self.recorded_frames += 1
+            
+            time.sleep(1.0 / self.settings["fps"])
+    
+    def stop_recording(self) -> Dict[str, Any]:
+        """
+        Ferma registrazione video.
+        
+        Returns:
+            Statistiche registrazione (frames, durata, filepath)
+        """
+        if not self.is_recording:
+            raise RuntimeError("Nessuna registrazione in corso")
+        
+        self.is_recording = False
+        
+        # Attendi thread
+        if self.recording_thread is not None:
+            self.recording_thread.join(timeout=2.0)
+            self.recording_thread = None
+        
+        # Chiudi writer
+        if self.video_writer is not None:
+            self.video_writer.release()
+            self.video_writer = None
+        
+        # Statistiche
+        duration = time.time() - self.recording_start_time if self.recording_start_time else 0
+        filepath = self.recording_path
+        frames = self.recorded_frames
+        
+        # Reset
+        self.recording_path = None
+        self.recording_start_time = None
+        self.recorded_frames = 0
+        
+        logger.info(f"Registrazione fermata: {frames} frames in {duration:.1f}s")
+        
+        return {
+            "status": "stopped",
+            "filepath": filepath,
+            "frames": frames,
+            "duration": duration,
+            "fps": frames / duration if duration > 0 else 0
+        }
+    
+    def get_recording_status(self) -> Dict[str, Any]:
+        """
+        Ritorna stato registrazione corrente.
+        
+        Returns:
+            Status dict (is_recording, frames, duration, filepath)
+        """
+        if not self.is_recording:
+            return {
+                "is_recording": False,
+                "frames": 0,
+                "duration": 0,
+                "filepath": None
+            }
+        
+        duration = time.time() - self.recording_start_time if self.recording_start_time else 0
+        
+        return {
+            "is_recording": True,
+            "frames": self.recorded_frames,
+            "duration": duration,
+            "fps": self.recorded_frames / duration if duration > 0 else 0,
+            "filepath": self.recording_path
+        }
+    
+    # ========== Image Sequence Capture ==========
+    
+    def start_image_sequence(
+        self,
+        count: int,
+        interval: float = 0.0,
+        filename_prefix: Optional[str] = None,
+        save_format: str = "fits",
+        output_dir: str = "data/sequences",
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Avvia acquisizione sequenza immagini.
+        
+        Args:
+            count: Numero immagini da catturare
+            interval: Intervallo tra catture in secondi (0 = massima velocità)
+            filename_prefix: Prefisso nome file. Se None, usa timestamp.
+            save_format: Formato salvataggio ('fits', 'png', 'jpg')
+            output_dir: Directory output
+            metadata: Metadata opzionali per FITS
+        
+        Returns:
+            Info sequenza (count, interval, output_dir)
+        """
+        if self.is_sequencing:
+            raise RuntimeError("Sequenza già in corso")
+        
+        if self.device is None:
+            raise RuntimeError("Device non aperto")
+        
+        # Assicura che capture sia attiva
+        if not self.is_capturing:
+            self.start_capture()
+        
+        # Crea directory
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # Prefisso
+        if filename_prefix is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename_prefix = f"seq_{timestamp}"
+        
+        # Parametri sequenza
+        self.sequence_params = {
+            "count": count,
+            "interval": interval,
+            "prefix": filename_prefix,
+            "format": save_format,
+            "output_dir": str(output_path),
+            "metadata": metadata or {}
+        }
+        
+        self.is_sequencing = True
+        self.captured_sequence_count = 0
+        
+        # Thread sequenza
+        self.sequence_thread = threading.Thread(target=self._sequence_loop, daemon=True)
+        self.sequence_thread.start()
+        
+        logger.info(f"Sequenza avviata: {count} immagini, interval={interval}s, formato={save_format}")
+        
+        return {
+            "status": "sequencing",
+            "count": count,
+            "interval": interval,
+            "format": save_format,
+            "output_dir": str(output_path),
+            "prefix": filename_prefix
+        }
+    
+    def _sequence_loop(self):
+        """Loop acquisizione sequenza (esegue in thread separato)."""
+        params = self.sequence_params
+        
+        for i in range(params["count"]):
+            if not self.is_sequencing:
+                break
+            
+            try:
+                # Cattura frame
+                frame = self.capture_single(timeout=5.0)
+                
+                # Nome file
+                filename = f"{params['prefix']}_{i+1:04d}"
+                
+                # Salva in base al formato
+                if params["format"] == "fits":
+                    filepath = self.save_fits(
+                        frame,
+                        filename,
+                        params["metadata"],
+                        output_dir=params["output_dir"]
+                    )
+                elif params["format"] == "png":
+                    filepath = Path(params["output_dir"]) / f"{filename}.png"
+                    cv2.imwrite(str(filepath), frame)
+                elif params["format"] == "jpg":
+                    filepath = Path(params["output_dir"]) / f"{filename}.jpg"
+                    cv2.imwrite(str(filepath), frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                else:
+                    raise ValueError(f"Formato non supportato: {params['format']}")
+                
+                self.captured_sequence_count += 1
+                logger.debug(f"Sequenza: catturata immagine {i+1}/{params['count']}")
+                
+                # Attendi intervallo
+                if i < params["count"] - 1 and params["interval"] > 0:
+                    time.sleep(params["interval"])
+                    
+            except Exception as e:
+                logger.error(f"Errore cattura sequenza frame {i+1}: {e}")
+                break
+        
+        # Auto-stop
+        if self.is_sequencing:
+            self.is_sequencing = False
+            logger.info(f"Sequenza completata: {self.captured_sequence_count} immagini")
+    
+    def stop_image_sequence(self) -> Dict[str, Any]:
+        """
+        Ferma acquisizione sequenza.
+        
+        Returns:
+            Statistiche sequenza (captured, total, output_dir)
+        """
+        if not self.is_sequencing:
+            raise RuntimeError("Nessuna sequenza in corso")
+        
+        self.is_sequencing = False
+        
+        # Attendi thread
+        if self.sequence_thread is not None:
+            self.sequence_thread.join(timeout=5.0)
+            self.sequence_thread = None
+        
+        captured = self.captured_sequence_count
+        total = self.sequence_params.get("count", 0)
+        output_dir = self.sequence_params.get("output_dir", "")
+        
+        logger.info(f"Sequenza fermata: {captured}/{total} immagini salvate")
+        
+        return {
+            "status": "stopped",
+            "captured": captured,
+            "total": total,
+            "output_dir": output_dir,
+            "completed": captured >= total
+        }
+    
+    def get_sequence_status(self) -> Dict[str, Any]:
+        """
+        Ritorna stato sequenza corrente.
+        
+        Returns:
+            Status dict (is_sequencing, captured, total, progress)
+        """
+        if not self.is_sequencing:
+            return {
+                "is_sequencing": False,
+                "captured": 0,
+                "total": 0,
+                "progress": 0
+            }
+        
+        captured = self.captured_sequence_count
+        total = self.sequence_params.get("count", 0)
+        
+        return {
+            "is_sequencing": True,
+            "captured": captured,
+            "total": total,
+            "progress": (captured / total * 100) if total > 0 else 0,
+            "output_dir": self.sequence_params.get("output_dir", "")
+        }
+    
     def __del__(self):
         """Cleanup on delete."""
+        # Stop recording se attivo
+        if self.is_recording:
+            try:
+                self.stop_recording()
+            except:
+                pass
+        
+        # Stop sequenza se attiva
+        if self.is_sequencing:
+            try:
+                self.stop_image_sequence()
+            except:
+                pass
+        
         self.close_device()
 
 

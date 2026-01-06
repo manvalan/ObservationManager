@@ -31,11 +31,13 @@
 - [x] Workflow completo: GOTO → Center → SYNC → NEXT con possibilità di skip
 - [x] Test suite completo con MockConnection (test_hop.py)
 
-## Milestone 5 – Automation & Sequencing (NEXT)
-- [ ] Sequence editor: CRUD su sequenze (name, steps con parametri)
-- [ ] Execution engine: esegui step-by-step con pause/resume/abort
-- [ ] Imaging integration: trigger camera, metadata FITS, real-time preview
-- [ ] Scripting support (optional): DSL semplice per sequenze avanzate
+## Milestone 5 – Automation & Sequencing ✓ COMPLETATO
+- [x] Sequence editor: CRUD su sequenze (name, steps con parametri)
+- [x] Execution engine: esegui step-by-step con pause/resume/abort
+- [x] 6 step types: GOTO, SYNC, IMAGE, WAIT, FILTER, FOCUS
+- [x] Modern UI con sidebar, form builder, real-time monitoring
+- [x] Full API endpoints per gestione sequenze
+- [x] Test suite completo (test_automation.py)
 
 ## Milestone 6 – Camera Control ✓ COMPLETATO
 - [x] CameraController class: gestione multi-device, settings (exposure/gain/binning)
@@ -44,29 +46,36 @@
 - [x] FITS export con metadata completo (target, coords, site, exposure)
 - [x] Statistiche avanzate: histogram, SNR, FWHM per focus assist
 
-## Milestone 7 – Logging, test, docs
+## Milestone 7 – Logging, test, docs ✓ COMPLETATO
 - [x] Virtual mount driver (MockConnection) con simulazione realistica
-- [x] Test suite: test_mock.py, test_hop.py, test_camera.py
-- [ ] Persistenza sessione completa (allineamenti, sync, target), export JSON.
-- [ ] Unit test conversioni, mock LX200, smoke REST uvicorn+httpx.
-- [ ] Documentazione flussi Align/Planetario/Hop, setup Gaia/camera, troubleshooting.
+- [x] Test suite: test_mock.py, test_hop.py, test_camera.py, test_automation.py
+- [x] Persistenza sessione completa (allineamenti, sync, target) con SQLite
+- [x] JSON export per analisi offline e archivio
+- [x] Unit test conversioni, mock LX200, smoke REST completo
+- [x] Documentazione completa: Guide per tutti i moduli + troubleshooting
 - [x] Contributing guide con development workflow
 - [x] Roadmap completa per Phase 2-4
 
 ---
 
 ## 🎯 Stato Attuale
-- **Star Hopping completo: UI moderna, algoritmo efficiente, workflow guidato GOTO→SYNC→NEXT**
-- **Camera control completo: device mgmt, exposure/gain/binning, FITS export, statistics**
-- **Watec 910BD: controllo TACOS completo, recording video, sequenze immagini**
+- **✓ Star Hopping**: UI moderna, algoritmo efficiente, GOTO→SYNC→NEXT workflow
+- **✓ Camera Control**: multi-device, FITS export, live preview, statistics
+- **✓ Watec 910BD**: TACOS control, video recording, image sequences
+- **✓ Sequence Automation**: Editor, 6 step types, execution monitoring
+- **✓ Session Management**: SQLite persistence, alignments, syncs, observations
 
-### 🔄 In Corso (Phase 2)
-- **Milestone 5**: Automation & Sequencing (prossima)
-- **Milestone 7**: Session Management & Persistence (test coverage)
+### 🎓 Phase 2 Complete!
+Tutte le funzionalità principali implementate e testate. Pronto per:
+- Osservazioni reali con mount LX200
+- Automazione sequenze complesse
+- Archiviazione dati persistente
 
-### 📋 Prossimi Passi Immediati
-1. **Sequence Automation**: Editor e execution engine per sequenze osservative
-2. **Session Persistence**: SQLite/JSON per log osservazioni e export dati
+### 📋 Prossimi Passi (Phase 3)
+1. **Advanced Imaging**: Filter wheel, live stacking, calibration
+2. **Analytics Dashboard**: Visualizzazione dati sessioni
+3. **Mobile App**: Remote operations
+
 
 ### 🔄 In Corso (Phase 2)
 - **Milestone 5**: Automation & Sequencing (prossima)

@@ -16,6 +16,7 @@ from lx200.protocol import LX200, parse_ra, parse_dec
 from lx200.catalog import resolve_name
 from lx200.catalog import resolve_id_via_gaia
 from server.camera import camera_controller
+from server.session_manager import SessionManager
 from server.sequence import (
     ObservingSequence, SequenceStep, StepType, StepStatus,
     SequenceExecutor, get_executor, register_executor, unregister_executor
@@ -903,6 +904,109 @@ def api_camera_save_fits(body: SaveFitsBody):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# -------- Video Recording & Image Sequences API --------
+
+class StartRecordingBody(BaseModel):
+    filename: Optional[str] = Field(None, description="Nome file (senza estensione)")
+    codec: str = Field("mp4v", description="Codec: mp4v, XVID, MJPEG, H264")
+    output_dir: str = Field("data/recordings", description="Directory output")
+
+
+class StartSequenceBody(BaseModel):
+    count: int = Field(..., description="Numero immagini da catturare")
+    interval: float = Field(0.0, description="Intervallo tra catture (secondi)")
+    filename_prefix: Optional[str] = Field(None, description="Prefisso nome file")
+    save_format: str = Field("fits", description="Formato: fits, png, jpg")
+    output_dir: str = Field("data/sequences", description="Directory output")
+    target: Optional[str] = Field(None, description="Nome target per metadata FITS")
+    ra: Optional[float] = Field(None, description="RA target (gradi)")
+    dec: Optional[float] = Field(None, description="Dec target (gradi)")
+
+
+@app.post("/api/camera/recording/start")
+def api_camera_start_recording(body: StartRecordingBody):
+    """Avvia registrazione video."""
+    try:
+        info = camera_controller.start_recording(
+            filename=body.filename,
+            codec=body.codec,
+            output_dir=body.output_dir
+        )
+        return info
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/camera/recording/stop")
+def api_camera_stop_recording():
+    """Ferma registrazione video."""
+    try:
+        result = camera_controller.stop_recording()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/camera/recording/status")
+def api_camera_recording_status():
+    """Ritorna stato registrazione corrente."""
+    try:
+        return camera_controller.get_recording_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/camera/sequence/start")
+def api_camera_start_sequence(body: StartSequenceBody):
+    """Avvia acquisizione sequenza immagini."""
+    try:
+        # Prepara metadata per FITS
+        metadata = {}
+        if body.target:
+            metadata['OBJECT'] = body.target
+        if body.ra is not None:
+            metadata['RA'] = body.ra
+        if body.dec is not None:
+            metadata['DEC'] = body.dec
+        
+        # Aggiungi sito
+        if site_settings.get("latitude"):
+            metadata['SITELAT'] = site_settings["latitude"]
+            metadata['SITELONG'] = site_settings["longitude"]
+            metadata['SITEELEV'] = site_settings["elevation"]
+        
+        info = camera_controller.start_image_sequence(
+            count=body.count,
+            interval=body.interval,
+            filename_prefix=body.filename_prefix,
+            save_format=body.save_format,
+            output_dir=body.output_dir,
+            metadata=metadata if body.save_format == "fits" else None
+        )
+        return info
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/camera/sequence/stop")
+def api_camera_stop_sequence():
+    """Ferma acquisizione sequenza."""
+    try:
+        result = camera_controller.stop_image_sequence()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/camera/sequence/status")
+def api_camera_sequence_status():
+    """Ritorna stato sequenza corrente."""
+    try:
+        return camera_controller.get_sequence_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # -------- Watec 910BD Control API --------
 
 class WatecConnectBody(BaseModel):
@@ -1594,3 +1698,139 @@ def api_hop_reset():
     hop_session["current_step"] = 0
     hop_session["completed_steps"] = []
     return {"ok": True, "message": "Hop session reset"}
+
+
+# -------- Session Management API --------
+
+session_state = {
+    "current_session_id": None,
+    "session": None
+}
+
+
+@app.post("/api/sessions")
+def api_create_session():
+    """Create new observing session."""
+    cfg = _read_settings()
+    session_id = SessionManager.create_session(site_id=cfg.get("site_id", "Observatory"))
+    session_state["current_session_id"] = session_id
+    return {
+        "ok": True,
+        "session_id": session_id
+    }
+
+
+@app.get("/api/sessions")
+def api_list_sessions(limit: int = 50):
+    """List observing sessions."""
+    sessions = SessionManager.list_sessions(limit=limit)
+    return {
+        "ok": True,
+        "sessions": sessions
+    }
+
+
+@app.get("/api/sessions/{session_id}")
+def api_get_session(session_id: str):
+    """Get session details."""
+    session = SessionManager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    summary = SessionManager.get_session_summary(session_id)
+    return {
+        "ok": True,
+        "session": session,
+        "summary": summary
+    }
+
+
+@app.post("/api/sessions/{session_id}/set-target")
+def api_session_set_target(session_id: str, body: dict):
+    """Set target for session."""
+    SessionManager.update_session(
+        session_id,
+        target_name=body.get("name"),
+        target_ra=body.get("ra_deg"),
+        target_dec=body.get("dec_deg")
+    )
+    return {"ok": True}
+
+
+@app.post("/api/sessions/{session_id}/log-alignment")
+def api_session_log_alignment(session_id: str, body: dict):
+    """Log alignment point."""
+    align_id = SessionManager.log_alignment(
+        session_id,
+        star_name=body.get("star_name"),
+        ra_deg=body.get("ra_deg"),
+        dec_deg=body.get("dec_deg"),
+        alt_deg=body.get("alt_deg"),
+        az_deg=body.get("az_deg"),
+        residual_arcmin=body.get("residual_arcmin", 0)
+    )
+    return {"ok": True, "alignment_id": align_id}
+
+
+@app.post("/api/sessions/{session_id}/log-sync")
+def api_session_log_sync(session_id: str, body: dict):
+    """Log mount sync."""
+    sync_id = SessionManager.log_sync(
+        session_id,
+        ra_deg=body.get("ra_deg"),
+        dec_deg=body.get("dec_deg"),
+        pointing_ra=body.get("pointing_ra"),
+        pointing_dec=body.get("pointing_dec"),
+        alignment_quality=body.get("alignment_quality", 0)
+    )
+    return {"ok": True, "sync_id": sync_id}
+
+
+@app.post("/api/sessions/{session_id}/log-observation")
+def api_session_log_observation(session_id: str, body: dict):
+    """Log observation."""
+    obs_id = SessionManager.log_observation(
+        session_id,
+        object_name=body.get("object_name"),
+        ra_deg=body.get("ra_deg"),
+        dec_deg=body.get("dec_deg"),
+        obs_type=body.get("obs_type"),
+        duration_sec=body.get("duration_sec"),
+        exposure_sec=body.get("exposure_sec"),
+        gain=body.get("gain"),
+        binning=body.get("binning"),
+        notes=body.get("notes", "")
+    )
+    return {"ok": True, "observation_id": obs_id}
+
+
+@app.get("/api/sessions/{session_id}/alignments")
+def api_get_session_alignments(session_id: str):
+    """Get alignment log."""
+    alignments = SessionManager.get_session_alignments(session_id)
+    return {"ok": True, "alignments": alignments}
+
+
+@app.get("/api/sessions/{session_id}/syncs")
+def api_get_session_syncs(session_id: str):
+    """Get sync log."""
+    syncs = SessionManager.get_session_syncs(session_id)
+    return {"ok": True, "syncs": syncs}
+
+
+@app.get("/api/sessions/{session_id}/observations")
+def api_get_session_observations(session_id: str):
+    """Get observation log."""
+    observations = SessionManager.get_session_observations(session_id)
+    return {"ok": True, "observations": observations}
+
+
+@app.get("/api/sessions/{session_id}/export")
+def api_export_session(session_id: str):
+    """Export session as JSON."""
+    export_data = SessionManager.export_session_json(session_id)
+    if not export_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {"ok": True, "data": export_data}
+

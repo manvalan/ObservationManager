@@ -458,6 +458,93 @@
           <input type="text" id="targetName" placeholder="es. M42" />
         </div>
       </div>
+      
+      <!-- Video Recording -->
+      <div class="panel">
+        <h2>🎬 Registrazione Video</h2>
+        
+        <div class="control-group">
+          <label>Stato</label>
+          <div id="recordingStatus">
+            <span class="status-indicator inactive" id="recordingStatusDot"></span>
+            <span id="recordingStatusText">Inattivo</span>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label>Nome File (opzionale)</label>
+          <input type="text" id="recordingFilename" placeholder="video_luna" />
+        </div>
+        
+        <div class="control-group">
+          <label>Codec</label>
+          <select id="recordingCodec">
+            <option value="mp4v">MP4V (MP4)</option>
+            <option value="MJPEG">MJPEG (AVI)</option>
+            <option value="XVID">XVID (AVI)</option>
+            <option value="H264">H264 (MP4)</option>
+          </select>
+        </div>
+        
+        <div class="btn-group">
+          <button id="btnStartRecording">🔴 Start Recording</button>
+          <button id="btnStopRecording" class="danger">⏹️ Stop</button>
+        </div>
+        
+        <div id="recordingInfo" style="margin-top: 0.75rem; font-size: 0.85rem; color: #888; display: none;">
+          <div>⏱️ Durata: <span id="recordingDuration">0s</span></div>
+          <div>🎞️ Frames: <span id="recordingFrames">0</span></div>
+          <div>📁 File: <span id="recordingFile">-</span></div>
+        </div>
+      </div>
+      
+      <!-- Image Sequences -->
+      <div class="panel">
+        <h2>📷 Sequenze Immagini</h2>
+        
+        <div class="control-group">
+          <label>Stato</label>
+          <div id="sequenceStatus">
+            <span class="status-indicator inactive" id="sequenceStatusDot"></span>
+            <span id="sequenceStatusText">Inattivo</span>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label>Numero Immagini</label>
+          <input type="number" id="sequenceCount" value="100" min="1" max="10000" />
+        </div>
+        
+        <div class="control-group">
+          <label>Intervallo (secondi)</label>
+          <input type="number" id="sequenceInterval" value="0" min="0" max="60" step="0.1" />
+          <div style="font-size: 0.75rem; color: #888;">0 = massima velocità</div>
+        </div>
+        
+        <div class="control-group">
+          <label>Prefisso File (opzionale)</label>
+          <input type="text" id="sequencePrefix" placeholder="giove_rgb" />
+        </div>
+        
+        <div class="control-group">
+          <label>Formato Salvataggio</label>
+          <select id="sequenceFormat">
+            <option value="fits">FITS (astronomico)</option>
+            <option value="png">PNG (lossless)</option>
+            <option value="jpg">JPEG (compresso)</option>
+          </select>
+        </div>
+        
+        <div class="btn-group">
+          <button id="btnStartSequence">▶️ Start Sequence</button>
+          <button id="btnStopSequence" class="danger">⏹️ Stop</button>
+        </div>
+        
+        <div id="sequenceInfo" style="margin-top: 0.75rem; font-size: 0.85rem; color: #888; display: none;">
+          <div>Progress: <span id="sequenceProgress">0%</span></div>
+          <div>Catturate: <span id="sequenceCaptured">0</span>/<span id="sequenceTotal">0</span></div>
+        </div>
+      </div>
     </div>
     
     <!-- Right Panel: Preview & Stats -->
@@ -1009,6 +1096,196 @@
       }
     }
     
+    // ========== Video Recording ==========
+    let recordingStatusInterval = null;
+    
+    function updateRecordingStatus(isRecording, frames = 0, duration = 0, filepath = null) {
+      const dot = document.getElementById('recordingStatusDot');
+      const text = document.getElementById('recordingStatusText');
+      const info = document.getElementById('recordingInfo');
+      
+      if (isRecording) {
+        dot.className = 'status-indicator active';
+        text.textContent = 'Registrando...';
+        info.style.display = 'block';
+        
+        document.getElementById('recordingDuration').textContent = `${duration.toFixed(1)}s`;
+        document.getElementById('recordingFrames').textContent = frames;
+        if (filepath) {
+          const filename = filepath.split('/').pop();
+          document.getElementById('recordingFile').textContent = filename;
+        }
+      } else {
+        dot.className = 'status-indicator inactive';
+        text.textContent = 'Inattivo';
+        info.style.display = 'none';
+      }
+    }
+    
+    async function startRecording() {
+      const filename = document.getElementById('recordingFilename').value.trim();
+      const codec = document.getElementById('recordingCodec').value;
+      
+      try {
+        log('Avvio registrazione video...');
+        const resp = await fetch('/api/camera/recording/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: filename || null, codec })
+        });
+        const data = await resp.json();
+        
+        log(`Registrazione avviata: ${data.filename} (${data.fps} fps)`, 'success');
+        updateRecordingStatus(true, 0, 0, data.filepath);
+        
+        // Poll status
+        recordingStatusInterval = setInterval(pollRecordingStatus, 1000);
+        
+      } catch (err) {
+        log(`Errore avvio registrazione: ${err.message}`, 'error');
+      }
+    }
+    
+    async function stopRecording() {
+      try {
+        const resp = await fetch('/api/camera/recording/stop', { method: 'POST' });
+        const data = await resp.json();
+        
+        log(`Registrazione fermata: ${data.frames} frames in ${data.duration.toFixed(1)}s`, 'success');
+        updateRecordingStatus(false);
+        
+        // Stop polling
+        if (recordingStatusInterval) {
+          clearInterval(recordingStatusInterval);
+          recordingStatusInterval = null;
+        }
+        
+      } catch (err) {
+        log(`Errore stop registrazione: ${err.message}`, 'error');
+      }
+    }
+    
+    async function pollRecordingStatus() {
+      try {
+        const resp = await fetch('/api/camera/recording/status');
+        const data = await resp.json();
+        
+        if (data.is_recording) {
+          updateRecordingStatus(true, data.frames, data.duration, data.filepath);
+        } else {
+          updateRecordingStatus(false);
+          if (recordingStatusInterval) {
+            clearInterval(recordingStatusInterval);
+            recordingStatusInterval = null;
+          }
+        }
+      } catch (err) {
+        // Silent fail
+      }
+    }
+    
+    // ========== Image Sequences ==========
+    let sequenceStatusInterval = null;
+    
+    function updateSequenceStatus(isSequencing, captured = 0, total = 0) {
+      const dot = document.getElementById('sequenceStatusDot');
+      const text = document.getElementById('sequenceStatusText');
+      const info = document.getElementById('sequenceInfo');
+      
+      if (isSequencing) {
+        dot.className = 'status-indicator active';
+        text.textContent = 'Acquisizione...';
+        info.style.display = 'block';
+        
+        const progress = total > 0 ? (captured / total * 100).toFixed(1) : 0;
+        document.getElementById('sequenceProgress').textContent = `${progress}%`;
+        document.getElementById('sequenceCaptured').textContent = captured;
+        document.getElementById('sequenceTotal').textContent = total;
+      } else {
+        dot.className = 'status-indicator inactive';
+        text.textContent = 'Inattivo';
+        info.style.display = 'none';
+      }
+    }
+    
+    async function startSequence() {
+      const count = parseInt(document.getElementById('sequenceCount').value);
+      const interval = parseFloat(document.getElementById('sequenceInterval').value);
+      const prefix = document.getElementById('sequencePrefix').value.trim();
+      const format = document.getElementById('sequenceFormat').value;
+      const target = document.getElementById('targetName').value.trim();
+      
+      if (count < 1) {
+        log('Numero immagini non valido', 'error');
+        return;
+      }
+      
+      try {
+        log(`Avvio sequenza: ${count} immagini, interval=${interval}s, formato=${format}...`);
+        const body = {
+          count,
+          interval,
+          filename_prefix: prefix || null,
+          save_format: format,
+          target: target || null
+        };
+        
+        const resp = await fetch('/api/camera/sequence/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        
+        log(`Sequenza avviata: ${data.prefix}`, 'success');
+        updateSequenceStatus(true, 0, count);
+        
+        // Poll status
+        sequenceStatusInterval = setInterval(pollSequenceStatus, 500);
+        
+      } catch (err) {
+        log(`Errore avvio sequenza: ${err.message}`, 'error');
+      }
+    }
+    
+    async function stopSequence() {
+      try {
+        const resp = await fetch('/api/camera/sequence/stop', { method: 'POST' });
+        const data = await resp.json();
+        
+        log(`Sequenza fermata: ${data.captured}/${data.total} immagini`, data.completed ? 'success' : 'warning');
+        updateSequenceStatus(false);
+        
+        // Stop polling
+        if (sequenceStatusInterval) {
+          clearInterval(sequenceStatusInterval);
+          sequenceStatusInterval = null;
+        }
+        
+      } catch (err) {
+        log(`Errore stop sequenza: ${err.message}`, 'error');
+      }
+    }
+    
+    async function pollSequenceStatus() {
+      try {
+        const resp = await fetch('/api/camera/sequence/status');
+        const data = await resp.json();
+        
+        if (data.is_sequencing) {
+          updateSequenceStatus(true, data.captured, data.total);
+        } else {
+          updateSequenceStatus(false);
+          if (sequenceStatusInterval) {
+            clearInterval(sequenceStatusInterval);
+            sequenceStatusInterval = null;
+          }
+        }
+      } catch (err) {
+        // Silent fail
+      }
+    }
+    
     // ========== Event Handlers ==========
     document.getElementById('btnScanDevices').onclick = scanDevices;
     document.getElementById('btnOpenDevice').onclick = openDevice;
@@ -1017,6 +1294,14 @@
     document.getElementById('btnStopCapture').onclick = stopCapture;
     document.getElementById('btnCaptureFrame').onclick = captureFrame;
     document.getElementById('btnSaveFITS').onclick = saveFITS;
+    
+    // Recording event handlers
+    document.getElementById('btnStartRecording').onclick = startRecording;
+    document.getElementById('btnStopRecording').onclick = stopRecording;
+    
+    // Sequence event handlers
+    document.getElementById('btnStartSequence').onclick = startSequence;
+    document.getElementById('btnStopSequence').onclick = stopSequence;
     
     // Watec event handlers
     document.getElementById('btnWatecConnect').onclick = watecConnect;

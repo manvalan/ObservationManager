@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sequence Automation - Osservatorio</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%); 
+      color: #fff; 
+      min-height: 100vh;
+    }
+    .header {
+      padding: 1.5rem; 
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
+      border-bottom: 3px solid #00d4ff;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
+    }
+    .header h1 { 
+      font-size: 1.8rem; 
+      background: linear-gradient(135deg, #00d4ff 0%, #0088ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 700;
+    }
+    .nav { display: flex; gap: 0.75rem; }
+    .nav a { 
+      padding: 0.75rem 1.5rem; 
+      background: linear-gradient(135deg, #00d4ff 0%, #0099dd 100%); 
+      color: #fff; 
+      text-decoration: none; 
+      border-radius: 8px;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+    .nav a:hover { 
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+    }
+    .container { max-width: 1600px; margin: 0 auto; padding: 2rem; }
+    
+    .main-grid {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      height: fit-content;
+      position: sticky;
+      top: 2rem;
+    }
+    .sidebar h2 {
+      color: #00d4ff;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+    .seq-list {
+      list-style: none;
+      margin-bottom: 1.5rem;
+    }
+    .seq-item {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1rem;
+      margin: 0.5rem 0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      border-left: 4px solid rgba(0, 212, 255, 0.5);
+    }
+    .seq-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-left-color: #00d4ff;
+      transform: translateX(4px);
+    }
+    .seq-item.active {
+      background: rgba(0, 212, 255, 0.15);
+      border-left-color: #00d4ff;
+    }
+    .seq-name { font-weight: 600; font-size: 0.95rem; }
+    .seq-meta { font-size: 0.8rem; color: #888; margin-top: 0.25rem; }
+    
+    .btn {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #00d4ff 0%, #0099dd 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    .btn:hover { 
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 212, 255, 0.4);
+    }
+    .btn.secondary {
+      background: linear-gradient(135deg, #555 0%, #444 100%);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .btn.secondary:hover {
+      background: linear-gradient(135deg, #666 0%, #555 100%);
+    }
+    .btn.danger {
+      background: linear-gradient(135deg, #d64545 0%, #b83a3a 100%);
+      box-shadow: 0 4px 12px rgba(214, 69, 69, 0.3);
+    }
+    .btn.danger:hover {
+      background: linear-gradient(135deg, #b83a3a 0%, #9d3131 100%);
+    }
+    .btn.success {
+      background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+    }
+    .btn.success:hover {
+      background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    /* Main content */
+    .content {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      padding: 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #888;
+    }
+    .empty-state h3 {
+      color: #aaa;
+      margin-bottom: 1rem;
+    }
+    
+    .seq-editor {
+      display: none;
+    }
+    .seq-editor.active {
+      display: block;
+    }
+    
+    .editor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(0, 212, 255, 0.2);
+    }
+    .editor-header h2 {
+      color: #00d4ff;
+      font-size: 1.5rem;
+    }
+    .editor-header .controls {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .editor-header .controls button {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
+    
+    .form-section {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .form-section h3 {
+      color: #00d4ff;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: #aaa;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 0.75rem;
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+      transition: all 0.3s;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+      box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.1);
+    }
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    
+    .steps-list {
+      margin-bottom: 2rem;
+    }
+    .steps-list h3 {
+      color: #00d4ff;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+    
+    .step-item {
+      background: rgba(0, 212, 255, 0.08);
+      padding: 1.5rem;
+      margin: 0.75rem 0;
+      border-radius: 12px;
+      border-left: 5px solid #00d4ff;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      transition: all 0.3s;
+    }
+    .step-item:hover {
+      background: rgba(0, 212, 255, 0.12);
+      box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
+    }
+    .step-number {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #00d4ff 0%, #0099dd 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-type {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #fff;
+    }
+    .step-desc {
+      font-size: 0.9rem;
+      color: #aaa;
+      margin-top: 0.5rem;
+    }
+    .step-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+    .step-actions button {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+    }
+    
+    .add-step-form {
+      background: rgba(0, 212, 255, 0.08);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 2px dashed rgba(0, 212, 255, 0.3);
+    }
+    .add-step-form h4 {
+      color: #00d4ff;
+      margin-bottom: 1rem;
+    }
+    .step-type-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .step-type-btn {
+      padding: 0.75rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(0, 212, 255, 0.3);
+      color: #aaa;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+    .step-type-btn:hover {
+      border-color: #00d4ff;
+      color: #00d4ff;
+      background: rgba(0, 212, 255, 0.1);
+    }
+    .step-type-btn.selected {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+    
+    .execution-panel {
+      background: rgba(40, 167, 69, 0.1);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 2px solid rgba(40, 167, 69, 0.3);
+      margin-bottom: 1.5rem;
+    }
+    .execution-panel h3 {
+      color: #28a745;
+      margin-bottom: 1rem;
+    }
+    .execution-controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .execution-status {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1rem;
+      border-radius: 8px;
+      border-left: 4px solid #28a745;
+    }
+    .status-line {
+      display: flex;
+      justify-content: space-between;
+      margin: 0.5rem 0;
+      font-size: 0.9rem;
+    }
+    
+    .msg {
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+      display: none;
+    }
+    .msg.show {
+      display: block;
+    }
+    .msg.info {
+      background: rgba(0, 136, 255, 0.15);
+      border-left: 4px solid #0088ff;
+      color: #adf;
+    }
+    .msg.success {
+      background: rgba(40, 167, 69, 0.15);
+      border-left: 4px solid #28a745;
+      color: #8fd;
+    }
+    .msg.error {
+      background: rgba(220, 53, 69, 0.15);
+      border-left: 4px solid #dc3545;
+      color: #f99;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚙️ Sequence Automation</h1>
+    <div class="nav">
+      <a href="/ui/index.html">Home</a>
+      <a href="/ui/sky.html">Sky Map</a>
+      <a href="/ui/hop.html">Star Hop</a>
+      <a href="/ui/camera.html">Camera</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="main-grid">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <h2>📋 Sequences</h2>
+        <ul class="seq-list" id="seqList"></ul>
+        
+        <button class="btn" onclick="createNewSequence()">➕ New Sequence</button>
+        <button class="btn secondary" onclick="loadSequences()">🔄 Refresh</button>
+      </div>
+
+      <!-- Main Content -->
+      <div class="content">
+        <div class="empty-state" id="emptyState">
+          <h3>No sequence selected</h3>
+          <p>Create a new sequence or select one from the list</p>
+        </div>
+
+        <div class="seq-editor" id="seqEditor">
+          <div class="editor-header">
+            <div>
+              <h2 id="seqTitle">Untitled Sequence</h2>
+              <p style="color: #888; margin-top: 0.25rem;" id="seqId"></p>
+            </div>
+            <div class="controls">
+              <button class="btn success" id="executeBtn" onclick="executeSequence()">▶️ Execute</button>
+              <button class="btn secondary" id="saveBtn" onclick="saveSequence()">💾 Save</button>
+              <button class="btn danger" onclick="deleteSequence()">🗑️ Delete</button>
+            </div>
+          </div>
+
+          <!-- Metadata Form -->
+          <div class="form-section">
+            <h3>📝 Details</h3>
+            <div class="form-group">
+              <label>Sequence Name</label>
+              <input type="text" id="seqName" placeholder="e.g., Jupiter Imaging Session">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea id="seqDesc" placeholder="Document your observation goals..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>Target (optional)</label>
+              <input type="text" id="seqTarget" placeholder="e.g., M31 - Andromeda Galaxy">
+            </div>
+          </div>
+
+          <!-- Execution Panel -->
+          <div class="execution-panel" id="executionPanel" style="display: none;">
+            <h3>▶️ Execution Status</h3>
+            <div class="execution-controls">
+              <button class="btn success" id="pauseBtn" onclick="pauseExecution()" style="display: none;">⏸️ Pause</button>
+              <button class="btn success" id="resumeBtn" onclick="resumeExecution()" style="display: none;">▶️ Resume</button>
+              <button class="btn danger" id="abortBtn" onclick="abortExecution()" style="display: none;">⏹️ Abort</button>
+            </div>
+            <div class="execution-status">
+              <div class="status-line">
+                <span>Current Step:</span>
+                <span id="currentStep">-</span>
+              </div>
+              <div class="status-line">
+                <span>Progress:</span>
+                <span id="progressPct">0%</span>
+              </div>
+              <div class="status-line">
+                <span>Elapsed Time:</span>
+                <span id="elapsedTime">0s</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Steps List -->
+          <div class="steps-list">
+            <h3>📚 Steps</h3>
+            <div id="stepsList"></div>
+
+            <!-- Add Step Form -->
+            <div class="add-step-form">
+              <h4>➕ Add Step</h4>
+              <div class="form-group">
+                <label>Step Type</label>
+                <div class="step-type-grid">
+                  <button type="button" class="step-type-btn" onclick="selectStepType('goto')">🎯 GOTO</button>
+                  <button type="button" class="step-type-btn" onclick="selectStepType('sync')">🔄 SYNC</button>
+                  <button type="button" class="step-type-btn" onclick="selectStepType('image')">📸 IMAGE</button>
+                  <button type="button" class="step-type-btn" onclick="selectStepType('wait')">⏱️ WAIT</button>
+                  <button type="button" class="step-type-btn" onclick="selectStepType('filter')">🎨 FILTER</button>
+                  <button type="button" class="step-type-btn" onclick="selectStepType('focus')">🔍 FOCUS</button>
+                </div>
+              </div>
+
+              <div id="stepParamsForm"></div>
+              <button class="btn" onclick="addStep()" style="margin-top: 1rem;">Add Step</button>
+            </div>
+          </div>
+
+          <div id="seqMsg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    let currentSequence = null;
+    let selectedStepType = null;
+
+    async function loadSequences() {
+      try {
+        const resp = await fetch(`${API_BASE}/sequences`);
+        const data = await resp.json();
+        
+        const list = document.getElementById('seqList');
+        list.innerHTML = '';
+
+        if (data.sequences && data.sequences.length > 0) {
+          data.sequences.forEach(seq => {
+            const li = document.createElement('li');
+            li.className = 'seq-item';
+            li.onclick = () => loadSequence(seq.id);
+            li.innerHTML = `
+              <div>
+                <div class="seq-name">${seq.name}</div>
+                <div class="seq-meta">${seq.step_count} steps • ${new Date(seq.created_at * 1000).toLocaleDateString()}</div>
+              </div>
+            `;
+            list.appendChild(li);
+          });
+        } else {
+          const msg = document.createElement('li');
+          msg.style.color = '#888';
+          msg.textContent = 'No sequences yet';
+          list.appendChild(msg);
+        }
+      } catch (e) {
+        console.error('Load sequences failed:', e);
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function loadSequence(seqId) {
+      try {
+        const resp = await fetch(`${API_BASE}/sequences/${seqId}`);
+        const data = await resp.json();
+        
+        currentSequence = data.sequence;
+        renderSequenceEditor();
+        
+        document.getElementById('seqList').querySelectorAll('.seq-item').forEach(item => {
+          item.classList.remove('active');
+        });
+        event.target.closest('.seq-item').classList.add('active');
+      } catch (e) {
+        showMsg(`Error loading sequence: ${e.message}`, 'error');
+      }
+    }
+
+    function renderSequenceEditor() {
+      if (!currentSequence) return;
+
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('seqEditor').classList.add('active');
+
+      document.getElementById('seqTitle').textContent = currentSequence.name;
+      document.getElementById('seqId').textContent = `ID: ${currentSequence.id}`;
+      document.getElementById('seqName').value = currentSequence.name;
+      document.getElementById('seqDesc').value = currentSequence.description;
+      document.getElementById('seqTarget').value = currentSequence.target || '';
+
+      renderSteps();
+    }
+
+    function renderSteps() {
+      const list = document.getElementById('stepsList');
+      list.innerHTML = '';
+
+      if (!currentSequence.steps || currentSequence.steps.length === 0) {
+        list.innerHTML = '<p style="color: #888; text-align: center; padding: 2rem;">No steps added yet</p>';
+        return;
+      }
+
+      currentSequence.steps.forEach((step, idx) => {
+        const div = document.createElement('div');
+        div.className = 'step-item';
+        div.innerHTML = `
+          <div class="step-number">${idx + 1}</div>
+          <div class="step-content">
+            <div class="step-type">📌 ${step.type.toUpperCase()}</div>
+            <div class="step-desc">${getStepDescription(step)}</div>
+          </div>
+          <div class="step-actions">
+            <button class="btn secondary" onclick="editStep('${step.id}')" style="padding: 0.5rem 1rem;">Edit</button>
+            <button class="btn danger" onclick="deleteStep('${step.id}')" style="padding: 0.5rem 1rem;">Delete</button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function getStepDescription(step) {
+      const p = step.params || {};
+      switch(step.type) {
+        case 'goto':
+          return `Slew to RA ${p.ra_deg?.toFixed(2)}° Dec ${p.dec_deg?.toFixed(2)}°`;
+        case 'image':
+          return `Capture ${p.count} image(s) with ${p.exposure}s exposure`;
+        case 'wait':
+          return `Wait for ${p.duration}s`;
+        case 'filter':
+          return `Change to filter position ${p.position}`;
+        case 'focus':
+          return `Auto-focus routine`;
+        case 'sync':
+          return `Sync on RA ${p.ra_deg?.toFixed(2)}° Dec ${p.dec_deg?.toFixed(2)}°`;
+        default:
+          return 'Custom step';
+      }
+    }
+
+    function selectStepType(type) {
+      selectedStepType = type;
+      document.querySelectorAll('.step-type-btn').forEach(btn => {
+        btn.classList.remove('selected');
+      });
+      event.target.classList.add('selected');
+      
+      renderStepParamsForm();
+    }
+
+    function renderStepParamsForm() {
+      const form = document.getElementById('stepParamsForm');
+      form.innerHTML = '';
+
+      if (!selectedStepType) return;
+
+      const inputs = {
+        goto: `
+          <div class="form-group">
+            <label>Target RA (degrees)</label>
+            <input type="number" id="param_ra_deg" step="0.01" placeholder="180.5">
+          </div>
+          <div class="form-group">
+            <label>Target Dec (degrees)</label>
+            <input type="number" id="param_dec_deg" step="0.01" placeholder="45.2">
+          </div>
+        `,
+        sync: `
+          <div class="form-group">
+            <label>Sync RA (degrees)</label>
+            <input type="number" id="param_ra_deg" step="0.01" placeholder="180.5">
+          </div>
+          <div class="form-group">
+            <label>Sync Dec (degrees)</label>
+            <input type="number" id="param_dec_deg" step="0.01" placeholder="45.2">
+          </div>
+        `,
+        image: `
+          <div class="form-group">
+            <label>Number of Images</label>
+            <input type="number" id="param_count" value="1" min="1" max="100">
+          </div>
+          <div class="form-group">
+            <label>Exposure (seconds)</label>
+            <input type="number" id="param_exposure" value="1" min="0.1" step="0.1">
+          </div>
+          <div class="form-group">
+            <label>Binning</label>
+            <select id="param_binning">
+              <option value="1x1">1x1 (Full Resolution)</option>
+              <option value="2x2">2x2 (4x Faster)</option>
+              <option value="4x4">4x4 (16x Faster)</option>
+            </select>
+          </div>
+        `,
+        wait: `
+          <div class="form-group">
+            <label>Wait Duration (seconds)</label>
+            <input type="number" id="param_duration" value="30" min="1" max="3600">
+          </div>
+        `,
+        filter: `
+          <div class="form-group">
+            <label>Filter Position</label>
+            <input type="number" id="param_position" value="1" min="1" max="8">
+          </div>
+        `,
+        focus: `
+          <div class="form-group">
+            <label>Focus Method</label>
+            <select id="param_method">
+              <option value="autofocus">Auto Focus</option>
+              <option value="manual">Manual</option>
+            </select>
+          </div>
+        `
+      };
+
+      form.innerHTML = inputs[selectedStepType] || '<p style="color: #888;">No parameters</p>';
+    }
+
+    async function addStep() {
+      if (!currentSequence || !selectedStepType) {
+        showMsg('Select a step type', 'error');
+        return;
+      }
+
+      const params = {};
+      document.querySelectorAll('#stepParamsForm input, #stepParamsForm select').forEach(input => {
+        const key = input.id.replace('param_', '');
+        const value = input.type === 'number' ? parseFloat(input.value) : input.value;
+        params[key] = value;
+      });
+
+      try {
+        const resp = await fetch(`${API_BASE}/sequences/${currentSequence.id}/steps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            step_type: selectedStepType,
+            params: params
+          })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          currentSequence.steps = data.sequence.steps;
+          renderSteps();
+          selectedStepType = null;
+          document.querySelectorAll('.step-type-btn').forEach(btn => btn.classList.remove('selected'));
+          document.getElementById('stepParamsForm').innerHTML = '';
+          showMsg('Step added!', 'success');
+        } else {
+          showMsg(`Error: ${data.message}`, 'error');
+        }
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function deleteStep(stepId) {
+      if (!confirm('Delete this step?')) return;
+
+      try {
+        const resp = await fetch(`${API_BASE}/sequences/${currentSequence.id}/steps/${stepId}`, {
+          method: 'DELETE'
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          currentSequence.steps = data.sequence.steps;
+          renderSteps();
+          showMsg('Step deleted', 'success');
+        }
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function saveSequence() {
+      currentSequence.name = document.getElementById('seqName').value;
+      currentSequence.description = document.getElementById('seqDesc').value;
+      currentSequence.target = document.getElementById('seqTarget').value;
+
+      try {
+        const resp = await fetch(`${API_BASE}/sequences/${currentSequence.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: currentSequence.name,
+            description: currentSequence.description,
+            target: currentSequence.target
+          })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          showMsg('Sequence saved!', 'success');
+          await loadSequences();
+        }
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function deleteSequence() {
+      if (!confirm('Delete this sequence permanently?')) return;
+
+      try {
+        const resp = await fetch(`${API_BASE}/sequences/${currentSequence.id}`, {
+          method: 'DELETE'
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          currentSequence = null;
+          document.getElementById('seqEditor').classList.remove('active');
+          document.getElementById('emptyState').style.display = 'block';
+          await loadSequences();
+          showMsg('Sequence deleted', 'success');
+        }
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function createNewSequence() {
+      try {
+        const resp = await fetch(`${API_BASE}/sequences`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `New Sequence ${new Date().toLocaleTimeString()}`,
+            description: '',
+            target: null
+          })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          await loadSequences();
+          loadSequence(data.sequence.id);
+        }
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function executeSequence() {
+      if (!currentSequence) return;
+
+      document.getElementById('executeBtn').disabled = true;
+      document.getElementById('executionPanel').style.display = 'block';
+
+      try {
+        const resp = await fetch(`${API_BASE}/sequences/${currentSequence.id}/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dry_run: false })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          showMsg('Sequence execution started', 'info');
+          monitorExecution();
+        }
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+        document.getElementById('executeBtn').disabled = false;
+      }
+    }
+
+    async function monitorExecution() {
+      const monitor = setInterval(async () => {
+        try {
+          const resp = await fetch(`${API_BASE}/sequences/${currentSequence.id}/status`);
+          const data = await resp.json();
+          const status = data.status;
+
+          document.getElementById('currentStep').textContent = `${status.current_step}/${status.total_steps}`;
+          document.getElementById('progressPct').textContent = `${status.progress_percent}%`;
+          document.getElementById('elapsedTime').textContent = `${Math.floor(status.elapsed_time)}s`;
+
+          if (status.state === 'completed' || status.state === 'failed') {
+            clearInterval(monitor);
+            document.getElementById('executeBtn').disabled = false;
+            showMsg(`Execution ${status.state}!`, status.state === 'completed' ? 'success' : 'error');
+          }
+        } catch (e) {
+          console.error('Monitor failed:', e);
+        }
+      }, 1000);
+    }
+
+    async function pauseExecution() {
+      try {
+        await fetch(`${API_BASE}/sequences/${currentSequence.id}/pause`, { method: 'POST' });
+        showMsg('Execution paused', 'info');
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function resumeExecution() {
+      try {
+        await fetch(`${API_BASE}/sequences/${currentSequence.id}/resume`, { method: 'POST' });
+        showMsg('Execution resumed', 'info');
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function abortExecution() {
+      try {
+        await fetch(`${API_BASE}/sequences/${currentSequence.id}/abort`, { method: 'POST' });
+        document.getElementById('executionPanel').style.display = 'none';
+        document.getElementById('executeBtn').disabled = false;
+        showMsg('Execution aborted', 'info');
+      } catch (e) {
+        showMsg(`Error: ${e.message}`, 'error');
+      }
+    }
+
+    function showMsg(text, type = 'info') {
+      const msg = document.getElementById('seqMsg');
+      msg.className = `msg ${type} show`;
+      msg.textContent = text;
+      setTimeout(() => { msg.classList.remove('show'); }, 4000);
+    }
+
+    // Load sequences on startup
+    loadSequences();
+  </script>
+</body>
+</html>
