@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Star Hopping - Demo Screenshot</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #fff;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      background: linear-gradient(135deg, #0088ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 3rem;
+      margin-bottom: 2rem;
+    }
+    .demo-section {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      padding: 2rem;
+      border-radius: 16px;
+      margin-bottom: 2rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 136, 255, 0.2);
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-top: 2rem;
+    }
+    .feature-box {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1.5rem;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .feature-box h3 {
+      color: #0088ff;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+    .feature-box p {
+      line-height: 1.8;
+      color: #ccc;
+    }
+    .step-preview {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1.5rem;
+      border-left: 5px solid #0088ff;
+      border-radius: 12px;
+      margin: 1rem 0;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .step-preview.completed {
+      border-left-color: #28a745;
+      opacity: 0.6;
+    }
+    .step-number-demo {
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 16px rgba(0, 136, 255, 0.5);
+      flex-shrink: 0;
+    }
+    .step-preview.completed .step-number-demo {
+      background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    }
+    .step-content-demo {
+      flex: 1;
+    }
+    .step-name-demo {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .step-info-demo {
+      font-size: 0.9rem;
+      color: #aaa;
+      font-family: monospace;
+    }
+    .button-demo {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 136, 255, 0.3);
+      display: inline-block;
+      margin: 0.25rem;
+    }
+    .button-demo.success {
+      background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+    }
+    .progress-demo {
+      height: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      overflow: hidden;
+      margin: 2rem 0;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .progress-fill-demo {
+      height: 100%;
+      background: linear-gradient(90deg, #0088ff 0%, #00ff88 100%);
+      width: 60%;
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .stat-box-demo {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1.5rem;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .stat-value-demo {
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #0088ff 0%, #00ff88 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .stat-label-demo {
+      font-size: 0.9rem;
+      color: #aaa;
+      margin-top: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .code-box {
+      background: #0d1117;
+      padding: 1rem;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      border: 1px solid rgba(0, 136, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌟 Star Hopping Navigator - Demo</h1>
+    
+    <div class="demo-section">
+      <h2 style="color: #0088ff; margin-bottom: 1rem;">📊 Progress Overview</h2>
+      <div class="stat-grid">
+        <div class="stat-box-demo">
+          <div class="stat-value-demo">3/5</div>
+          <div class="stat-label-demo">Steps Completed</div>
+        </div>
+        <div class="stat-box-demo">
+          <div class="stat-value-demo">38.5°</div>
+          <div class="stat-label-demo">Total Distance</div>
+        </div>
+        <div class="stat-box-demo">
+          <div class="stat-value-demo">60%</div>
+          <div class="stat-label-demo">Progress</div>
+        </div>
+      </div>
+      
+      <div class="progress-demo">
+        <div class="progress-fill-demo"></div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2 style="color: #0088ff; margin-bottom: 1rem;">📋 Navigation Steps</h2>
+      
+      <div class="step-preview completed">
+        <div class="step-number-demo">1</div>
+        <div class="step-content-demo">
+          <div class="step-name-demo">⭐ Vega</div>
+          <div class="step-info-demo">
+            RA 279.234° / Dec 38.783° | Alt 65.2° / Az 180.5°<br>
+            ⭐ Mag 0.0 | 📏 8.5° from prev | 🎯 42.3° to target
+          </div>
+        </div>
+        <div style="color: #28a745; font-weight: bold;">✓ COMPLETED</div>
+      </div>
+
+      <div class="step-preview completed">
+        <div class="step-number-demo">2</div>
+        <div class="step-content-demo">
+          <div class="step-name-demo">⭐ Deneb</div>
+          <div class="step-info-demo">
+            RA 310.358° / Dec 45.280° | Alt 58.7° / Az 210.3°<br>
+            ⭐ Mag 1.2 | 📏 9.8° from prev | 🎯 32.5° to target
+          </div>
+        </div>
+        <div style="color: #28a745; font-weight: bold;">✓ COMPLETED</div>
+      </div>
+
+      <div class="step-preview">
+        <div class="step-number-demo">3</div>
+        <div class="step-content-demo">
+          <div class="step-name-demo">⭐ HIP 112122</div>
+          <div class="step-info-demo">
+            RA 340.567° / Dec 47.123° | Alt 52.1° / Az 235.8°<br>
+            ⭐ Mag 3.8 | 📏 7.2° from prev | 🎯 25.3° to target
+          </div>
+        </div>
+        <div>
+          <button class="button-demo">🎯 GOTO</button>
+          <button class="button-demo success">🔄 SYNC</button>
+          <button class="button-demo">⏭️ Skip</button>
+          <button class="button-demo success">✓ Next</button>
+        </div>
+      </div>
+
+      <div class="step-preview" style="opacity: 0.5;">
+        <div class="step-number-demo" style="background: linear-gradient(135deg, #555 0%, #444 100%);">4</div>
+        <div class="step-content-demo">
+          <div class="step-name-demo">⭐ SAO 52267</div>
+          <div class="step-info-demo">
+            RA 355.234° / Dec 48.567° | Alt 48.3° / Az 255.2°<br>
+            ⭐ Mag 3.5 | 📏 8.9° from prev | 🎯 16.4° to target
+          </div>
+        </div>
+        <div style="color: #888;">⏳ WAITING</div>
+      </div>
+
+      <div class="step-preview" style="opacity: 0.5;">
+        <div class="step-number-demo" style="background: linear-gradient(135deg, #555 0%, #444 100%);">5</div>
+        <div class="step-content-demo">
+          <div class="step-name-demo">🎯 M31 (Andromeda Galaxy)</div>
+          <div class="step-info-demo">
+            RA 10.685° / Dec 41.269° | Alt 42.5° / Az 285.3°<br>
+            🎯 TARGET | 📏 16.4° from prev | 🎯 0.0° to target
+          </div>
+        </div>
+        <div style="color: #888;">⏳ WAITING</div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2 style="color: #0088ff; margin-bottom: 1rem;">✨ Key Features</h2>
+      <div class="feature-grid">
+        <div class="feature-box">
+          <h3>🎨 Modern Design</h3>
+          <p>
+            • Gradient backgrounds<br>
+            • Smooth animations<br>
+            • 3D button effects<br>
+            • Backdrop blur<br>
+            • Responsive layout
+          </p>
+        </div>
+        
+        <div class="feature-box">
+          <h3>🚀 Workflow Guidato</h3>
+          <p>
+            • GOTO → Slew automatico<br>
+            • Center → Guida manuale<br>
+            • SYNC → Migliora allineamento<br>
+            • NEXT → Passo successivo<br>
+            • Skip → Salta se necessario
+          </p>
+        </div>
+        
+        <div class="feature-box">
+          <h3>📊 Real-time Tracking</h3>
+          <p>
+            • Progress bar animata<br>
+            • Statistiche live<br>
+            • Visual feedback<br>
+            • Step highlighting<br>
+            • Distance calculation
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2 style="color: #0088ff; margin-bottom: 1rem;">💻 Example API Call</h2>
+      <div class="code-box">
+<pre style="margin: 0; color: #aaa;">
+<span style="color: #0088ff;">POST</span> /api/plan-hop
+
+{
+  "target_ra": <span style="color: #00ff88;">10.6847</span>,
+  "target_dec": <span style="color: #00ff88;">41.2688</span>,
+  "target_name": <span style="color: #ffaa00;">"M31"</span>,
+  "max_steps": <span style="color: #00ff88;">5</span>,
+  "max_mag": <span style="color: #00ff88;">4.0</span>,
+  "max_spacing": <span style="color: #00ff88;">10.0</span>
+}
+
+<span style="color: #888;">// Response</span>
+{
+  "ok": <span style="color: #00ff88;">true</span>,
+  "steps": <span style="color: #00ff88;">5</span>,
+  "total_steps": <span style="color: #00ff88;">5</span>,
+  "estimated_time_minutes": <span style="color: #00ff88;">10</span>
+}
+</pre>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 3rem; padding: 2rem; background: rgba(0, 136, 255, 0.1); border-radius: 16px;">
+      <h2 style="color: #0088ff; margin-bottom: 1rem;">🎉 Milestone 4 Complete!</h2>
+      <p style="font-size: 1.2rem; line-height: 1.8;">
+        Star Hopping Navigator è pronto per navigare verso qualsiasi oggetto celeste.<br>
+        Usa stelle luminose come guida, migliora l'allineamento con ogni SYNC,<br>
+        e raggiungi target deboli con precisione professionale.
+      </p>
+      <div style="margin-top: 2rem;">
+        <a href="hop.html" style="display: inline-block; padding: 1rem 2rem; background: linear-gradient(135deg, #0088ff 0%, #0066cc 100%); color: #fff; text-decoration: none; border-radius: 10px; font-weight: 600; box-shadow: 0 4px 12px rgba(0, 136, 255, 0.3);">
+          🚀 Launch Star Hopping
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
