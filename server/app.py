@@ -15,6 +15,7 @@ from lx200.connection import SerialConnection, MockConnection, detect_serial_por
 from lx200.protocol import LX200, parse_ra, parse_dec
 from lx200.catalog import resolve_name
 from lx200.catalog import resolve_id_via_gaia
+from server.catalog_local import local_catalog
 from server.camera import camera_controller
 from server.session_manager import SessionManager
 from server.filter_wheel import SerialFilterWheel, MockFilterWheel, filter_wheel_manager
@@ -380,6 +381,19 @@ def api_sync(body: SyncBody) -> dict:
 @app.get("/api/find")
 def api_find(name: str = Query(..., min_length=1), limit: int = 5) -> dict:
     try:
+        # Prova catalogo locale Gaia/Crossreference prima
+        results = local_catalog.search_by_name(name, limit=limit)
+        if results:
+            out = [{
+                "name": r["name"], 
+                "ra_deg": r["ra_deg"], 
+                "dec_deg": r["dec_deg"], 
+                "mag": r.get("mag"), 
+                "catalog": r.get("catalog", "Local")
+            } for r in results]
+            return {"ok": True, "results": out, "source": "local"}
+        
+        # Fallback a risoluzione online
         results = resolve_name(name, limit=limit)
         out = [
             {
@@ -388,10 +402,11 @@ def api_find(name: str = Query(..., min_length=1), limit: int = 5) -> dict:
                 "dec_deg": e.dec_deg,
                 "mag": e.mag,
                 "designations": e.designations,
+                "catalog": "Online",
             }
             for e in results
         ]
-        return {"ok": True, "results": out}
+        return {"ok": True, "results": out, "source": "online"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -399,10 +414,21 @@ def api_find(name: str = Query(..., min_length=1), limit: int = 5) -> dict:
 @app.post("/api/goto-name")
 def api_goto_name(name: str) -> dict:
     try:
-        results = resolve_name(name, limit=10)
-        if not results:
+        # Prova catalogo locale prima
+        target = None
+        local_results = local_catalog.search_by_name(name, limit=1)
+        if local_results:
+            r = local_results[0]
+            target = type('obj', (), {"name": r["name"], "ra_deg": r["ra_deg"], "dec_deg": r["dec_deg"]})
+        else:
+            # Fallback online
+            results = resolve_name(name, limit=10)
+            if results:
+                target = results[0]
+        
+        if not target:
             raise ValueError("Nessun risultato trovato")
-        target = results[0]
+        
         ra_s = parse_ra(target.ra_deg / 15.0)
         dec_s = parse_dec(target.dec_deg)
         lx = manager.get_lx200()
@@ -719,22 +745,40 @@ def api_resolve(
     name: str | None = None,
 ):
     try:
+        # Prova catalogo locale (Crossreference)
         if sao:
+            e = local_catalog.lookup_sao(sao)
+            if e:
+                return {"ok": True, "result": e, "source": "local"}
+            # Fallback online
             e = resolve_id_via_gaia("sao", sao)
             if e:
-                return {"ok": True, "result": e.__dict__}
+                return {"ok": True, "result": e.__dict__, "source": "online"}
         if hip:
+            e = local_catalog.lookup_hip(hip)
+            if e:
+                return {"ok": True, "result": e, "source": "local"}
+            # Fallback online
             e = resolve_id_via_gaia("hip", hip)
             if e:
-                return {"ok": True, "result": e.__dict__}
+                return {"ok": True, "result": e.__dict__, "source": "online"}
         if hd:
+            e = local_catalog.lookup_hd(hd)
+            if e:
+                return {"ok": True, "result": e, "source": "local"}
+            # Fallback online
             e = resolve_id_via_gaia("hd", hd)
             if e:
-                return {"ok": True, "result": e.__dict__}
+                return {"ok": True, "result": e.__dict__, "source": "online"}
         if name:
+            # Prova locale prima
+            res_local = local_catalog.search_by_name(name, limit=1)
+            if res_local:
+                return {"ok": True, "result": res_local[0], "source": "local"}
+            # Fallback online
             res = resolve_name(name, limit=1)
             if res:
-                return {"ok": True, "result": res[0].__dict__}
+                return {"ok": True, "result": res[0].__dict__, "source": "online"}
         return {"ok": False}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
