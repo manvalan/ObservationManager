@@ -45,8 +45,11 @@
     .controls .row { display: flex; gap: .5rem; align-items: center; }
     .controls .row > * { flex: 1; }
     .controls input[type="checkbox"] { width: auto; cursor: pointer; }
+    .controls input[type="range"] { width: 100%; }
     .controls input:focus, .controls button:focus { outline: none; border-color: #0088ff; }
     .controls button:hover { background: #0088ff; color: #fff; }
+    .controls .section { margin: 1rem 0; padding-top: 0.5rem; border-top: 1px solid #444; }
+    .controls .section:first-child { border-top: none; margin-top: 0; }
     .info {
       background: #222; padding: 1rem; border-radius: 4px; font-size: 0.85rem;
       max-height: 300px; overflow-y: auto;
@@ -113,6 +116,37 @@
           <input type="checkbox" id="night-checkbox">
         </div>
         <hr style="border-color:#333; margin: .75rem 0;">
+        
+        <div class="section">
+          <h3 style="margin-bottom: 0.5rem; font-size: 0.95rem;">Configurazione Cielo</h3>
+          <div class="row">
+            <label for="show-below-horizon" style="flex:0 0 auto;">Stelle sotto orizzonte</label>
+            <input type="checkbox" id="show-below-horizon">
+          </div>
+          <label for="density-slider">Densità stelle: <span id="density-value">1.0</span></label>
+          <input type="range" id="density-slider" min="0.1" max="1.0" step="0.1" value="1.0">
+          <label for="label-mag-threshold">Soglia etichette (Mag):</label>
+          <input type="number" id="label-mag-threshold" step="0.5" value="3.0" min="0" max="10">
+          <button id="save-sky-config-btn">Salva Configurazione</button>
+        </div>
+        
+        <div class="section">
+          <h3 style="margin-bottom: 0.5rem; font-size: 0.95rem;">Tempo Simulato</h3>
+          <label for="time-control">Orario:</label>
+          <div class="row">
+            <input type="datetime-local" id="time-control" style="flex: 2;">
+            <button id="time-now-btn" style="flex: 1; white-space: nowrap;">Adesso</button>
+          </div>
+          <div class="row">
+            <button id="time-play-btn" style="flex: 1;">▶ Play</button>
+            <button id="time-stop-btn" style="flex: 1;">■ Stop</button>
+          </div>
+          <label for="time-speed">Velocità simulazione:</label>
+          <input type="range" id="time-speed" min="0.1" max="10" step="0.1" value="1">
+          <small style="color: #aaa; display: block; margin-top: 0.25rem;">1x = tempo reale, 2x = 2x più veloce</small>
+        </div>
+
+        <hr style="border-color:#333; margin: .75rem 0;">
         <label>Cerca oggetto:</label>
         <div class="row">
           <input type="text" id="search-input" placeholder="M42, Vega, SAO ..." style="flex:2;">
@@ -153,6 +187,16 @@
     const nightCheckbox = document.getElementById('night-checkbox');
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
+    const showBelowHorizonCheckbox = document.getElementById('show-below-horizon');
+    const densitySlider = document.getElementById('density-slider');
+    const densityValue = document.getElementById('density-value');
+    const labelMagThresholdInput = document.getElementById('label-mag-threshold');
+    const saveSkyConfigBtn = document.getElementById('save-sky-config-btn');
+    const timeControl = document.getElementById('time-control');
+    const timeNowBtn = document.getElementById('time-now-btn');
+    const timePlayBtn = document.getElementById('time-play-btn');
+    const timeStopBtn = document.getElementById('time-stop-btn');
+    const timeSpeedInput = document.getElementById('time-speed');
 
     let stars = [];
     let centerRa = 0, centerDec = 0;
@@ -164,6 +208,10 @@
     let mountTimer = null;
     let highlightTargets = []; // [{alt, az, name}]
     let nightMode = false;
+    let skyConfig = {}; // Sky configuration from API
+    let simulatedTime = null; // null = real time, otherwise Unix timestamp
+    let timePlayInterval = null; // setInterval handle for time simulation
+    let timePlaySpeed = 1; // Playback speed multiplier
 
     // Stereographic projection Alt/Az -> x,y
     function altaz_to_xy(alt, az) {
@@ -239,11 +287,18 @@
       const dec = parseFloat(decInput.value);
       const radius = parseFloat(radiusInput.value);
       const maxmag = parseFloat(magInput.value);
+      const showBelowHorizon = showBelowHorizonCheckbox.checked ? 'true' : 'false';
+      const density = parseFloat(densitySlider.value);
+      const timestamp = simulatedTime ? (simulatedTime / 1000) : null; // Convert to Unix timestamp
       centerRa = ra;
       centerDec = dec;
       centerInfo.textContent = `Center RA/Dec: ${ra.toFixed(1)}° ${dec.toFixed(1)}°`;
       try {
-        const resp = await fetch(`${API_BASE}/sky/stars?ra_deg=${ra}&dec_deg=${dec}&radius=${radius}&maxmag=${maxmag}`);
+        let url = `${API_BASE}/sky/stars?ra_deg=${ra}&dec_deg=${dec}&radius=${radius}&maxmag=${maxmag}&show_below_horizon=${showBelowHorizon}&density=${density}`;
+        if (timestamp) {
+          url += `&timestamp=${timestamp}`;
+        }
+        const resp = await fetch(url);
         const data = await resp.json();
         if (data.ok) {
           stars = data.stars;
@@ -262,8 +317,15 @@
       msgDiv.innerHTML = '';
       raInput.value = '0';
       decInput.value = '0';
+      const showBelowHorizon = showBelowHorizonCheckbox.checked ? 'true' : 'false';
+      const density = parseFloat(densitySlider.value);
+      const timestamp = simulatedTime ? (simulatedTime / 1000) : null;
       try {
-        const resp = await fetch(`${API_BASE}/sky/stars?radius=${radiusInput.value}&maxmag=${magInput.value}`);
+        let url = `${API_BASE}/sky/stars?radius=${radiusInput.value}&maxmag=${magInput.value}&show_below_horizon=${showBelowHorizon}&density=${density}`;
+        if (timestamp) {
+          url += `&timestamp=${timestamp}`;
+        }
+        const resp = await fetch(url);
         const data = await resp.json();
         if (data.ok) {
           centerRa = data.center_ra;
@@ -350,12 +412,20 @@
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
         ctx.fill();
-        if (mag < 3) {
+        // Draw label if magnitude is below threshold
+        const labelMagThreshold = parseFloat(labelMagThresholdInput.value || '3.0');
+        if (mag < labelMagThreshold) {
           ctx.strokeStyle = nightMode ? '#ff6666' : '#ffff00';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.arc(pos.x, pos.y, size + 3, 0, Math.PI * 2);
           ctx.stroke();
+          // Draw star name/label
+          if (s.name) {
+            ctx.fillStyle = nightMode ? '#ff6666' : '#ffff88';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText(s.name, pos.x + 5, pos.y - 3);
+          }
         }
       });
 
@@ -493,6 +563,95 @@
     loadBtn.addEventListener('click', loadStars);
     zenithBtn.addEventListener('click', loadZenith);
 
+    // Density slider update
+    densitySlider.addEventListener('input', () => {
+      densityValue.textContent = (parseFloat(densitySlider.value)).toFixed(1);
+      loadStars();
+    });
+
+    // Config save
+    saveSkyConfigBtn.addEventListener('click', async () => {
+      const config = {
+        maxmag: parseFloat(magInput.value),
+        radius: parseFloat(radiusInput.value),
+        show_below_horizon: showBelowHorizonCheckbox.checked,
+        label_mag_threshold: parseFloat(labelMagThresholdInput.value),
+        density: parseFloat(densitySlider.value)
+      };
+      try {
+        const resp = await fetch(`${API_BASE}/sky/config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          msgDiv.innerHTML = `<div class="msg">Configurazione salvata con successo!</div>`;
+          setTimeout(() => msgDiv.innerHTML = '', 3000);
+        }
+      } catch (e) {
+        msgDiv.innerHTML = `<div class="msg err">Errore saving config: ${e.message}</div>`;
+      }
+    });
+
+    // Time controls
+    timeNowBtn.addEventListener('click', () => {
+      simulatedTime = null;
+      const now = new Date();
+      timeControl.value = now.toISOString().slice(0, 16);
+      stopTimePlayback();
+      loadStars();
+    });
+
+    timePlayBtn.addEventListener('click', () => {
+      if (timePlayInterval) return; // Already playing
+      const dateStr = timeControl.value;
+      if (!dateStr) {
+        simulatedTime = null;
+      } else {
+        simulatedTime = new Date(dateStr).getTime();
+      }
+      timePlaySpeed = parseFloat(timeSpeedInput.value || 1);
+      const deltaMs = 1000; // Update every second
+      timePlayInterval = setInterval(() => {
+        if (simulatedTime === null) {
+          simulatedTime = Date.now();
+        }
+        simulatedTime += deltaMs * timePlaySpeed;
+        const dt = new Date(simulatedTime);
+        timeControl.value = dt.toISOString().slice(0, 16);
+        loadStars();
+      }, deltaMs);
+    });
+
+    timeStopBtn.addEventListener('click', stopTimePlayback);
+
+    function stopTimePlayback() {
+      if (timePlayInterval) {
+        clearInterval(timePlayInterval);
+        timePlayInterval = null;
+      }
+    }
+
+    // Load sky config on startup
+    async function loadSkyConfig() {
+      try {
+        const resp = await fetch(`${API_BASE}/sky/config`);
+        const data = await resp.json();
+        if (data.ok && data.config) {
+          skyConfig = data.config;
+          showBelowHorizonCheckbox.checked = skyConfig.show_below_horizon || false;
+          densitySlider.value = skyConfig.density || 1.0;
+          densityValue.textContent = (skyConfig.density || 1.0).toFixed(1);
+          labelMagThresholdInput.value = skyConfig.label_mag_threshold || 3.0;
+          magInput.value = skyConfig.maxmag || 5.0;
+          radiusInput.value = skyConfig.radius || 60.0;
+        }
+      } catch (e) {
+        console.error('Error loading sky config:', e);
+      }
+    }
+
      centerMountBtn.addEventListener('click', () => {
        if (!mountAltAz) return;
        const pos = altaz_to_xy(mountAltAz.alt, mountAltAz.az);
@@ -547,7 +706,13 @@
      });
 
     // Init
-    window.addEventListener('load', () => { fitZoomToHorizon(); loadZenith(); });
+    window.addEventListener('load', () => { 
+      loadSkyConfig();
+      fitZoomToHorizon(); 
+      const now = new Date();
+      timeControl.value = now.toISOString().slice(0, 16);
+      loadZenith(); 
+    });
     window.addEventListener('load', () => {
       if (mountTimer) clearInterval(mountTimer);
       mountTimer = setInterval(pollMount, 1500);

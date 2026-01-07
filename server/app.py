@@ -233,13 +233,14 @@ class AltAzBody(BaseModel):
 class ApparentBody(BaseModel):
     alt_deg: float
     az_deg: float
+    timestamp: float | None = None
 
 
 @app.post("/api/altaz")
-def api_altaz(body: AltAzBody) -> dict:
+def api_altaz(body: AltAzBody, timestamp: float | None = None) -> dict:
     try:
         cfg = _read_settings()
-        alt, az = ra_dec_to_altaz(body.ra_deg, body.dec_deg, cfg)
+        alt, az = ra_dec_to_altaz(body.ra_deg, body.dec_deg, cfg, timestamp)
         return {"ok": True, "alt_deg": alt, "az_deg": az, "settings": cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -249,7 +250,7 @@ def api_altaz(body: AltAzBody) -> dict:
 def api_apparent(body: ApparentBody) -> dict:
     try:
         cfg = _read_settings()
-        ra, dec = altaz_to_ra_dec(body.alt_deg, body.az_deg, cfg)
+        ra, dec = altaz_to_ra_dec(body.alt_deg, body.az_deg, cfg, body.timestamp)
         return {"ok": True, "ra_deg": ra, "dec_deg": dec, "settings": cfg}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -546,22 +547,28 @@ def api_align_sync(body: AlignSyncBody):
 
 # -------- Sky (planetario) --------
 @app.get("/api/sky/stars")
-def api_sky_stars(ra_deg: float = None, dec_deg: float = None, radius: float = 60.0, maxmag: float = 5.0):
+def api_sky_stars(ra_deg: float = None, dec_deg: float = None, radius: float = 60.0, maxmag: float = 5.0, timestamp: float | None = None, show_below_horizon: bool = False, density: float = 1.0):
     try:
         if ra_deg is None or dec_deg is None:
             cfg = _read_settings()
-            ra_deg, dec_deg = zenith_radec(cfg)
-        gaia_stars = _gaia_lookup_cone(float(ra_deg), float(dec_deg), float(radius), float(maxmag), limit=500)
+            ra_deg, dec_deg = zenith_radec(cfg, timestamp)
+        gaia_stars = _gaia_lookup_cone(float(ra_deg), float(dec_deg), float(radius), float(maxmag), limit=1000)
         if not gaia_stars:
             stars = _load_bright_stars()
         else:
             stars = gaia_stars
         cfg = _read_settings()
         out = []
-        for s in stars:
+        # Applica densità: riduci numero di stelle in base a density (0.1..1.0)
+        if density is None:
+            density = 1.0
+        step = max(1, int(1.0 / max(0.1, min(1.0, density))))
+        for i, s in enumerate(stars):
+            if i % step != 0:
+                continue
             try:
-                alt, az = ra_dec_to_altaz(s["ra_deg"], s["dec_deg"], cfg)
-                if alt < -2:
+                alt, az = ra_dec_to_altaz(s["ra_deg"], s["dec_deg"], cfg, timestamp)
+                if not show_below_horizon and alt < 0:
                     continue
                 mag = s.get("mag")
                 if mag is None:
@@ -576,7 +583,7 @@ def api_sky_stars(ra_deg: float = None, dec_deg: float = None, radius: float = 6
                 })
             except Exception:
                 continue
-        return {"ok": True, "center_ra": ra_deg, "center_dec": dec_deg, "radius": radius, "stars": out}
+        return {"ok": True, "center_ra": ra_deg, "center_dec": dec_deg, "radius": radius, "stars": out, "count": len(out)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -585,9 +592,11 @@ def api_sky_stars(ra_deg: float = None, dec_deg: float = None, radius: float = 6
 SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "data", "settings.json")
 os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
 BRIGHT_PATH = pathlib.Path(os.path.join(os.path.dirname(__file__), "data", "bright_stars.json"))
+# Se presente variabile d'ambiente GAIA_LOOKUP_PATH, usa quella. Altrimenti preferisci binario del workspace.
 GAIA_EXE_CANDIDATES = [
-    shutil.which("gaia_lookup"),
+    os.environ.get("GAIA_LOOKUP_PATH"),
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "gaia", "build", "gaia_lookup"),
+    shutil.which("gaia_lookup"),
 ]
 
 
@@ -613,6 +622,21 @@ class SettingsBody(BaseModel):
         if not (-14 <= self.tz_offset_hours <= 14):
             raise ValueError("TZ offset fuori range")
 
+class SkyConfigBody(BaseModel):
+    maxmag: float = 5.0
+    radius: float = 60.0
+    show_below_horizon: bool = False
+    label_mag_threshold: float = 3.0
+    density: float = 1.0
+
+    def validate_ranges(self) -> None:
+        if not (0.0 <= self.maxmag <= 20.0):
+            raise ValueError("maxmag fuori range (0..20)")
+        if not (5.0 <= self.radius <= 180.0):
+            raise ValueError("radius fuori range (5..180)")
+        if not (0.1 <= self.density <= 1.0):
+            raise ValueError("density fuori range (0.1..1.0)")
+
 
 def _read_settings() -> dict:
     if os.path.isfile(SETTINGS_PATH):
@@ -635,24 +659,51 @@ def _write_settings(data: dict) -> None:
     with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
+# Sky config (planetario)
+SKY_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "data", "sky_config.json")
+os.makedirs(os.path.dirname(SKY_CONFIG_PATH), exist_ok=True)
 
-def _observer_and_time(now_ts=None):
+def _read_sky_config() -> dict:
+    if os.path.isfile(SKY_CONFIG_PATH):
+        try:
+            with open(SKY_CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "maxmag": 5.0,
+        "radius": 60.0,
+        "show_below_horizon": False,
+        "label_mag_threshold": 3.0,
+        "density": 1.0,
+    }
+
+def _write_sky_config(data: dict) -> None:
+    with open(SKY_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _observer_and_time(now_ts: float | None = None):
     cfg = _read_settings()
     ts = load.timescale()
-    t = ts.now() if now_ts is None else now_ts
+    if now_ts is None:
+        t = ts.now()
+    else:
+        import datetime
+        t = ts.from_datetime(datetime.datetime.utcfromtimestamp(float(now_ts)))
     obs = wgs84.latlon(cfg["latitude"], cfg["longitude"], cfg.get("altitude_m", 0.0))
     return obs, t, cfg
 
 
-def ra_dec_to_altaz(ra_deg: float, dec_deg: float, cfg: dict):
-    obs, t, _ = _observer_and_time()
+def ra_dec_to_altaz(ra_deg: float, dec_deg: float, cfg: dict, timestamp: float | None = None):
+    obs, t, _ = _observer_and_time(timestamp)
     star = Star(ra_hours=ra_deg / 15.0, dec_degrees=dec_deg)
     app = obs.at(t).observe(star).apparent()
     alt, az, _ = app.altaz(temperature_C=cfg.get("temperature_c", 10.0), pressure_mbar=cfg.get("pressure_mbar", 1013.25))
     return alt.degrees, az.degrees
 
 
-def altaz_to_ra_dec(alt_deg: float, az_deg: float, cfg: dict):
+def altaz_to_ra_dec(alt_deg: float, az_deg: float, cfg: dict, timestamp: float | None = None):
     # Invert observing geometry numerically: approximate by local sidereal time and trig (no planetary kernel)
     lat = math.radians(cfg["latitude"])
     alt = math.radians(alt_deg)
@@ -667,14 +718,18 @@ def altaz_to_ra_dec(alt_deg: float, az_deg: float, cfg: dict):
         h = 2 * math.pi - h
     # approximate LST via Skyfield timescale and sidereal_time()
     ts = load.timescale()
-    t = ts.now()
+    if timestamp is None:
+        t = ts.now()
+    else:
+        import datetime
+        t = ts.from_datetime(datetime.datetime.utcfromtimestamp(float(timestamp)))
     lst_deg = t.gast.degrees  # GAST in degrees
     ra = (lst_deg - math.degrees(h)) % 360.0
     return ra, math.degrees(dec)
 
 
-def zenith_radec(cfg: dict):
-    obs, t, _ = _observer_and_time()
+def zenith_radec(cfg: dict, timestamp: float | None = None):
+    obs, t, _ = _observer_and_time(timestamp)
     radec = obs.at(t).from_altaz(alt_degrees=90.0, az_degrees=0.0).radec()
     return radec[0].hours * 15.0, radec[1].degrees
 
@@ -690,7 +745,16 @@ def _load_bright_stars():
     return stars
 
 
+_GAIA_CONE_CACHE: dict[tuple, dict] = {}
+
 def _gaia_lookup_cone(ra_deg: float, dec_deg: float, radius_deg: float, maxmag: float = 4.0, limit: int = 50):
+    # Cache chiave arrotondata per ridurre duplicati
+    key = (round(float(ra_deg), 2), round(float(dec_deg), 2), round(float(radius_deg), 1), round(float(maxmag), 1))
+    now = time.time()
+    cache_entry = _GAIA_CONE_CACHE.get(key)
+    if cache_entry and (now - cache_entry.get("ts", 0)) < 300:
+        return cache_entry.get("stars", [])
+
     exe = next((e for e in GAIA_EXE_CANDIDATES if e and os.path.isfile(e)), None)
     if not exe:
         return []
@@ -699,7 +763,7 @@ def _gaia_lookup_cone(ra_deg: float, dec_deg: float, radius_deg: float, maxmag: 
             [exe, "--cone", str(ra_deg), str(dec_deg), str(radius_deg), "--maxmag", str(maxmag)],
             capture_output=True,
             text=True,
-            timeout=4,
+            timeout=6,
         )
         if proc.returncode != 0 or not proc.stdout:
             return []
@@ -712,12 +776,13 @@ def _gaia_lookup_cone(ra_deg: float, dec_deg: float, radius_deg: float, maxmag: 
             try:
                 out.append({
                     "name": s.get("designation") or s.get("name") or str(s.get("source_id", "")),
-                    "ra_deg": float(s.get("ra_deg")),
-                    "dec_deg": float(s.get("dec_deg")),
-                    "mag": s.get("mag_g") if s.get("mag_g") is not None else s.get("phot_g_mean_mag"),
+                    "ra_deg": float(s.get("ra") or s.get("ra_deg")),
+                    "dec_deg": float(s.get("dec") or s.get("dec_deg")),
+                    "mag": s.get("mag") if s.get("mag") is not None else s.get("phot_g_mean_mag") or s.get("mag_g"),
                 })
             except Exception:
                 continue
+        _GAIA_CONE_CACHE[key] = {"stars": out, "ts": now}
         return out
     except Exception:
         return []
@@ -734,6 +799,22 @@ def api_set_settings(body: SettingsBody) -> dict:
     data = body.model_dump()
     _write_settings(data)
     return {"ok": True, "settings": data}
+
+
+# -------- Sky Config (planetario) --------
+@app.get("/api/sky/config")
+def api_get_sky_config() -> dict:
+    """Ritorna la configurazione del planetario (sky)."""
+    return {"ok": True, "config": _read_sky_config()}
+
+
+@app.post("/api/sky/config")
+def api_set_sky_config(body: SkyConfigBody) -> dict:
+    """Aggiorna la configurazione del planetario (sky)."""
+    body.validate_ranges()
+    data = body.model_dump()
+    _write_sky_config(data)
+    return {"ok": True, "config": data}
 
 
 # -------- Resolve by ID --------
