@@ -128,6 +128,10 @@
           <label for="label-mag-threshold">Soglia etichette (Mag):</label>
           <input type="number" id="label-mag-threshold" step="0.5" value="3.0" min="0" max="10">
           <button id="save-sky-config-btn">Salva Configurazione</button>
+          <div class="row">
+            <label for="show-boundaries" style="flex:0 0 auto;">Confini costellazioni</label>
+            <input type="checkbox" id="show-boundaries">
+          </div>
         </div>
         
         <div class="section">
@@ -187,6 +191,17 @@
     const nightCheckbox = document.getElementById('night-checkbox');
     const searchInput = document.getElementById('search-input');
     const searchBtn = document.getElementById('search-btn');
+    const showBelowHorizonCheckbox = document.getElementById('show-below-horizon');
+    const densitySlider = document.getElementById('density-slider');
+    const densityValue = document.getElementById('density-value');
+    const labelMagThresholdInput = document.getElementById('label-mag-threshold');
+    const saveSkyConfigBtn = document.getElementById('save-sky-config-btn');
+    const timeControl = document.getElementById('time-control');
+    const timeNowBtn = document.getElementById('time-now-btn');
+    const timePlayBtn = document.getElementById('time-play-btn');
+    const timeStopBtn = document.getElementById('time-stop-btn');
+    const timeSpeedInput = document.getElementById('time-speed');
+    const showBoundariesCheckbox = document.getElementById('show-boundaries');
     const showBelowHorizonCheckbox = document.getElementById('show-below-horizon');
     const densitySlider = document.getElementById('density-slider');
     const densityValue = document.getElementById('density-value');
@@ -612,6 +627,10 @@
       loadStars();
     });
 
+    showBoundariesCheckbox.addEventListener('change', () => {
+      loadConstellationBoundaries();
+    });
+
     // Show below horizon toggle
     showBelowHorizonCheckbox.addEventListener('change', () => {
       loadStars();
@@ -783,5 +802,22 @@
       Math.radians = (d) => d * Math.PI / 180;
     }
   </script>
+</body>
+</html>
+      loadZenith(); 
+    });
+    window.addEventListener('load', () => {
+      if (mountTimer) clearInterval(mountTimer);
+      mountTimer = setInterval(pollMount, 1500);
+    });
+    window.addEventListener('resize', () => { fitZoomToHorizon(); draw(); });
+
+    // Polyfill for Math.radians
+    if (!Math.radians) {
+      Math.radians = (d) => d * Math.PI / 180;
+    }
+  </script>
+</body>
+</html>
 </body>
 </html>

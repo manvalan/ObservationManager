@@ -593,6 +593,7 @@ SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "data", "settings.json")
 os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
 BRIGHT_PATH = pathlib.Path(os.path.join(os.path.dirname(__file__), "data", "bright_stars.json"))
 CONSTELLATIONS_PATH = pathlib.Path(os.path.join(os.path.dirname(__file__), "data", "constellations.json"))
+CONSTELLATION_BOUNDARIES_PATH = pathlib.Path(os.path.join(os.path.dirname(__file__), "data", "constellation_boundaries.json"))
 # Se presente variabile d'ambiente GAIA_LOOKUP_PATH, usa quella. Altrimenti preferisci binario del workspace.
 GAIA_EXE_CANDIDATES = [
     os.environ.get("GAIA_LOOKUP_PATH"),
@@ -757,6 +758,17 @@ def _load_constellations():
     return consts
 
 
+def _load_constellation_boundaries():
+    consts = []
+    if CONSTELLATION_BOUNDARIES_PATH.is_file():
+        try:
+            with open(CONSTELLATION_BOUNDARIES_PATH, "r", encoding="utf-8") as f:
+                consts = json.load(f)
+        except Exception:
+            consts = []
+    return consts
+
+
 _GAIA_CONE_CACHE: dict[tuple, dict] = {}
 
 def _gaia_lookup_cone(ra_deg: float, dec_deg: float, radius_deg: float, maxmag: float = 4.0, limit: int = 50):
@@ -829,6 +841,41 @@ def api_sky_constellations(timestamp: float | None = None, show_below_horizon: b
                     "name": c.get("name", ""),
                     "abbrev": c.get("abbrev"),
                     "segments": segments_out
+                })
+        return {"ok": True, "constellations": out}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/sky/constellations/boundaries")
+def api_sky_constellation_boundaries(timestamp: float | None = None, show_below_horizon: bool = False):
+    """Ritorna confini delle costellazioni come segmenti Alt/Az."""
+    try:
+        cfg = _read_settings()
+        consts = _load_constellation_boundaries()
+        out = []
+        for c in consts:
+            segs_out = []
+            boundary = c.get("boundary", [])
+            if not boundary or len(boundary) < 2:
+                continue
+            # connect consecutive points
+            for i in range(len(boundary) - 1):
+                try:
+                    ra1, dec1 = boundary[i]
+                    ra2, dec2 = boundary[i + 1]
+                    alt1, az1 = ra_dec_to_altaz(float(ra1), float(dec1), cfg, timestamp)
+                    alt2, az2 = ra_dec_to_altaz(float(ra2), float(dec2), cfg, timestamp)
+                    if not show_below_horizon and alt1 < 0 and alt2 < 0:
+                        continue
+                    segs_out.append({"from": {"alt": alt1, "az": az1}, "to": {"alt": alt2, "az": az2}})
+                except Exception:
+                    continue
+            if segs_out:
+                out.append({
+                    "name": c.get("name", ""),
+                    "abbrev": c.get("abbrev"),
+                    "segments": segs_out
                 })
         return {"ok": True, "constellations": out}
     except Exception as e:
