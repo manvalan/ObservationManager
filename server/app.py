@@ -592,6 +592,7 @@ def api_sky_stars(ra_deg: float = None, dec_deg: float = None, radius: float = 6
 SETTINGS_PATH = os.path.join(os.path.dirname(__file__), "data", "settings.json")
 os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
 BRIGHT_PATH = pathlib.Path(os.path.join(os.path.dirname(__file__), "data", "bright_stars.json"))
+CONSTELLATIONS_PATH = pathlib.Path(os.path.join(os.path.dirname(__file__), "data", "constellations.json"))
 # Se presente variabile d'ambiente GAIA_LOOKUP_PATH, usa quella. Altrimenti preferisci binario del workspace.
 GAIA_EXE_CANDIDATES = [
     os.environ.get("GAIA_LOOKUP_PATH"),
@@ -745,6 +746,17 @@ def _load_bright_stars():
     return stars
 
 
+def _load_constellations():
+    consts = []
+    if CONSTELLATIONS_PATH.is_file():
+        try:
+            with open(CONSTELLATIONS_PATH, "r", encoding="utf-8") as f:
+                consts = json.load(f)
+        except Exception:
+            consts = []
+    return consts
+
+
 _GAIA_CONE_CACHE: dict[tuple, dict] = {}
 
 def _gaia_lookup_cone(ra_deg: float, dec_deg: float, radius_deg: float, maxmag: float = 4.0, limit: int = 50):
@@ -786,6 +798,41 @@ def _gaia_lookup_cone(ra_deg: float, dec_deg: float, radius_deg: float, maxmag: 
         return out
     except Exception:
         return []
+
+
+@app.get("/api/sky/constellations")
+def api_sky_constellations(timestamp: float | None = None, show_below_horizon: bool = False):
+    """Ritorna linee delle costellazioni come segmenti Alt/Az."""
+    try:
+        cfg = _read_settings()
+        consts = _load_constellations()
+        out = []
+        for c in consts:
+            segments_out = []
+            for seg in c.get("lines", []):
+                if not isinstance(seg, list) or len(seg) != 2:
+                    continue
+                try:
+                    (ra1, dec1), (ra2, dec2) = seg
+                    alt1, az1 = ra_dec_to_altaz(float(ra1), float(dec1), cfg, timestamp)
+                    alt2, az2 = ra_dec_to_altaz(float(ra2), float(dec2), cfg, timestamp)
+                    if not show_below_horizon and alt1 < 0 and alt2 < 0:
+                        continue
+                    segments_out.append({
+                        "from": {"alt": alt1, "az": az1},
+                        "to": {"alt": alt2, "az": az2}
+                    })
+                except Exception:
+                    continue
+            if segments_out:
+                out.append({
+                    "name": c.get("name", ""),
+                    "abbrev": c.get("abbrev"),
+                    "segments": segments_out
+                })
+        return {"ok": True, "constellations": out}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/settings")

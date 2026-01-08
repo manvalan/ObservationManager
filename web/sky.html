@@ -208,6 +208,7 @@
     let mountTimer = null;
     let highlightTargets = []; // [{alt, az, name}]
     let nightMode = false;
+    let constellationsSegments = []; // [{name, segments:[{from:{alt,az}, to:{alt,az}}]}]
     let skyConfig = {}; // Sky configuration from API
     let simulatedTime = null; // null = real time, otherwise Unix timestamp
     let timePlayInterval = null; // setInterval handle for time simulation
@@ -304,6 +305,7 @@
           stars = data.stars;
           statusDiv.innerHTML = `<strong>Stelle caricate:</strong> ${stars.length}`;
           renderStarList();
+          await loadConstellations();
           draw();
         } else {
           msgDiv.innerHTML = `<div class="msg err">Errore: ${data}</div>`;
@@ -336,12 +338,32 @@
           statusDiv.innerHTML = `<strong>Stelle al zenit:</strong> ${stars.length}`;
           centerInfo.textContent = `Center RA/Dec: ${centerRa.toFixed(1)}° ${centerDec.toFixed(1)}°`;
           renderStarList();
+          await loadConstellations();
           draw();
         } else {
           msgDiv.innerHTML = `<div class="msg err">Errore: ${data}</div>`;
         }
       } catch (e) {
         msgDiv.innerHTML = `<div class="msg err">Errore: ${e.message}</div>`;
+      }
+    }
+
+    async function loadConstellations() {
+      const showBelowHorizon = showBelowHorizonCheckbox.checked ? 'true' : 'false';
+      const timestamp = simulatedTime ? (simulatedTime / 1000) : null;
+      let url = `${API_BASE}/sky/constellations?show_below_horizon=${showBelowHorizon}`;
+      if (timestamp) {
+        url += `&timestamp=${timestamp}`;
+      }
+      try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.ok) {
+          constellationsSegments = data.constellations || [];
+          draw();
+        }
+      } catch (e) {
+        // silenzia errori
       }
     }
 
@@ -401,6 +423,27 @@
           const ly = canvas.height / 2 - panY - label_rho * Math.cos(azR);
           ctx.fillText(cardinals[az], lx, ly);
         }
+      }
+
+      // Draw constellations
+      if (constellationsSegments.length > 0) {
+        ctx.strokeStyle = nightMode ? 'rgba(255,120,120,0.35)' : 'rgba(64,160,255,0.45)';
+        ctx.lineWidth = 1;
+        ctx.lineJoin = 'round';
+        constellationsSegments.forEach(c => {
+          c.segments?.forEach(seg => {
+            try {
+              const p1 = altaz_to_xy(seg.from.alt, seg.from.az);
+              const p2 = altaz_to_xy(seg.to.alt, seg.to.az);
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.stroke();
+            } catch (e) {
+              // ignore
+            }
+          });
+        });
       }
 
       // Draw stars
@@ -569,6 +612,11 @@
       loadStars();
     });
 
+    // Show below horizon toggle
+    showBelowHorizonCheckbox.addEventListener('change', () => {
+      loadStars();
+    });
+
     // Config save
     saveSkyConfigBtn.addEventListener('click', async () => {
       const config = {
@@ -599,6 +647,17 @@
       simulatedTime = null;
       const now = new Date();
       timeControl.value = now.toISOString().slice(0, 16);
+      stopTimePlayback();
+      loadStars();
+    });
+
+    timeControl.addEventListener('change', () => {
+      const val = timeControl.value;
+      if (!val) {
+        simulatedTime = null;
+      } else {
+        simulatedTime = new Date(val).getTime();
+      }
       stopTimePlayback();
       loadStars();
     });
